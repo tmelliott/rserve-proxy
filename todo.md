@@ -12,7 +12,7 @@
 hit `http://localhost:8880/api/health` and get a 200.
 
 - [x] Verify `docker compose` brings up Traefik, Postgres, Manager without errors
-- [ ] Run Drizzle migrations on startup (or add a `db:push` script)
+- [x] Run Drizzle migrations on startup (or add a `db:push` script)
 - [ ] Wire up the health route to return `{ status: "ok", db: true }` (ping Postgres)
 - [ ] Add a `seed` script that creates an initial admin user (username + hashed password)
 - [ ] Confirm Traefik dashboard is accessible at `http://localhost:8881`
