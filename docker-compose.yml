@@ -61,3 +61,5 @@ volumes:
   pgdata:
   app_uploads:
   # letsencrypt:
+
+# Development override: docker compose -f docker-compose.yml -f docker-compose.dev.yml up

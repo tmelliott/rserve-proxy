@@ -21,6 +21,16 @@ import type {
   ContainerInfo,
 } from "@rserve-proxy/shared";
 
+/**
+ * Label applied to ALL resources (containers, images) created by the spawner.
+ * Used for identification and cleanup:
+ *   docker container ls --filter label=managed-by=rserve-proxy
+ *   docker image ls --filter label=managed-by=rserve-proxy
+ */
+const MANAGED_LABEL = "managed-by";
+const MANAGED_VALUE = "rserve-proxy";
+const APP_ID_LABEL = "rserve-proxy.app-id";
+
 export class DockerSpawner implements ISpawner {
   private docker: Docker;
   private networkName: string;
@@ -30,6 +40,38 @@ export class DockerSpawner implements ISpawner {
       socketPath: options?.socketPath || "/var/run/docker.sock",
     });
     this.networkName = options?.networkName || "rserve-proxy_default";
+  }
+
+  /** List all containers managed by rserve-proxy */
+  async listManagedContainers(appId?: string): Promise<Docker.ContainerInfo[]> {
+    const filters: Record<string, string[]> = {
+      label: [`${MANAGED_LABEL}=${MANAGED_VALUE}`],
+    };
+    if (appId) {
+      filters.label.push(`${APP_ID_LABEL}=${appId}`);
+    }
+    return this.docker.listContainers({ all: true, filters });
+  }
+
+  /** Remove all containers and images managed by rserve-proxy */
+  async cleanupAll(): Promise<{ containers: number; images: number }> {
+    const containers = await this.listManagedContainers();
+    for (const info of containers) {
+      const container = this.docker.getContainer(info.Id);
+      if (info.State === "running") {
+        await container.stop();
+      }
+      await container.remove();
+    }
+
+    const images = await this.docker.listImages({
+      filters: { label: [`${MANAGED_LABEL}=${MANAGED_VALUE}`] },
+    });
+    for (const img of images) {
+      await this.docker.getImage(img.Id).remove({ force: true });
+    }
+
+    return { containers: containers.length, images: images.length };
   }
 
   async buildImage(options: BuildImageOptions): Promise<BuildResult> {

@@ -1,0 +1,16 @@
+# Development overrides — avoids port conflicts with local services.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Or set COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+
+services:
+  traefik:
+    ports:
+      - "8880:80"       # http://localhost:8880 instead of :80
+      # - "8443:443"
+      - "8881:8080"     # Traefik dashboard: http://localhost:8881
+
+  postgres:
+    ports:
+      - "5433:5432"     # localhost:5433 to avoid clashing with local postgres
