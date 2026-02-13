@@ -219,5 +219,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 0 — Dev Stack Boots
-**Next up:** Phase 1a — Session Auth
+**Current phase:** 1a — Session Auth
+**Completed:** Phase 0 — Dev Stack Boots ✓
