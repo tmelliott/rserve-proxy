@@ -6,29 +6,33 @@ Rserve proxy for running and managing Rserve instances on a VPS.
 
 The system is deployed as a Docker Compose stack:
 
-```
-Internet
-  │
-  ▼
-┌────────────┐         ┌──────────────────────────────────────────┐
-│  traefik   │         │  manager (Fastify API + React UI)        │
-│  :443      │         │  ┌──────────────────────────────────────┐ │
-│            │         │  │  spawner (module)                    │ │
-│ auto-      │         │  │  - builds app Docker images          │ │
-│ discovers  │         │  │  - starts/stops Rserve containers    │ │
-│ containers │         │  │  - health checks                     │ │
-│ via Docker │         │  │  - manages via Docker API (dockerode) │ │
-│ labels     │         │  └──────────────────────────────────────┘ │
-└────────────┘         └──────────────────────────────────────────┘
-       │                          │
-       │    ┌─────────────────────┤
-       │    │                     │
-       ▼    ▼                     ▼
-┌──────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│ rserve-app1  │  │ rserve-app2      │  │ postgres         │
-│ (container)  │  │ (container)      │  │ (state DB)       │
-│ R 4.4 + pkgs │  │ R 4.3 + pkgs    │  │                  │
-└──────────────┘  └──────────────────┘  └──────────────────┘
+```mermaid
+graph TD
+    Internet((Internet)) --> Traefik
+
+    subgraph compose["Docker Compose Stack"]
+        Traefik["🔀 Traefik\n:443 / :80\nauto-discovers containers\nvia Docker labels"]
+        Manager["🖥️ Manager\nFastify API + React UI"]
+        Postgres[("🗄️ PostgreSQL\nusers, tokens,\napp configs")]
+
+        subgraph spawner["Spawner Module (self-contained)"]
+            SpawnerCore["builds app Docker images\nstarts/stops Rserve containers\nhealth checks\nmanages via Docker API"]
+        end
+
+        Manager --- spawner
+        Manager --> Postgres
+    end
+
+    Traefik -- "/app1" --> App1
+    Traefik -- "/app2" --> App2
+    Traefik -- "/*" --> Manager
+
+    subgraph instances["Dynamically Spawned Rserve Containers"]
+        App1["📦 rserve-app1\nR 4.4 + packages"]
+        App2["📦 rserve-app2\nR 4.3 + packages"]
+    end
+
+    spawner -. "create/start/stop\n(via dockerode)" .-> instances
 ```
 
 ### Services
@@ -69,19 +73,40 @@ Internet
 
 ### Request Flow
 
-1. Client sends request to `https://rserve.mydomain.com/app1`
-2. **Traefik** matches the path to the correct Rserve container (via Docker labels)
-3. The Rserve container processes the request and responds
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Traefik
+    participant Rserve as Rserve Container
+
+    Client->>Traefik: GET /app1/endpoint
+    Traefik->>Rserve: proxy (matched via Docker labels)
+    Rserve-->>Traefik: R response
+    Traefik-->>Client: response
+```
 
 ### Management Flow
 
-1. Admin logs into the **manager** web UI (or uses the API with a bearer token)
-2. Admin creates an app: provides a name, R version, package list, and code source
-   (git repo URL or file upload), plus the entry script name
-3. The **manager** calls the **spawner** module, which:
-   a. Builds a custom Docker image (FROM `rserve-base:{R_VERSION}`, installs packages, copies code)
-   b. Creates and starts a container with Traefik labels for routing
-4. Traefik auto-discovers the new container and begins routing traffic
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Manager as Manager (API)
+    participant Spawner
+    participant Docker as Docker API
+    participant Traefik
+
+    Admin->>Manager: Create app (name, R version, packages, code source)
+    Manager->>Spawner: startApp(config)
+    Spawner->>Docker: Build image (FROM rserve-base, install packages, copy code)
+    Docker-->>Spawner: Image built
+    Spawner->>Docker: Create container (with Traefik labels)
+    Docker-->>Spawner: Container started
+    Spawner-->>Manager: App running
+    Manager-->>Admin: App deployed
+    Note over Traefik: Auto-discovers new container via Docker socket
+    Traefik->>Docker: Detects new labels
+    Note over Traefik: /app1 now routes to new container
+```
 
 ### Tech Stack
 
