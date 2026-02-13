@@ -1,0 +1,12 @@
+{
+  "name": "rserve-proxy",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build",
+    "lint": "bun run --filter '*' lint",
+    "db:generate": "bun run --filter @rserve-proxy/api db:generate",
+    "db:migrate": "bun run --filter @rserve-proxy/api db:migrate"
+  }
+}

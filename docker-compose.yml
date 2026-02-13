@@ -1,0 +1,63 @@
+services:
+  traefik:
+    image: traefik:v3.3
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      # Uncomment for HTTPS with Let's Encrypt:
+      # - "--entrypoints.websecure.address=:443"
+      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.letsencrypt.acme.email=you@example.com"
+      # - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      # - "443:443"
+      - "8080:8080" # Traefik dashboard (dev only)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # - letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.manager.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.manager.priority=1"
+      - "traefik.http.services.manager.loadbalancer.server.port=3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://rserve:rserve@postgres:5432/rserve
+      PORT: "3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - app_uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: rserve
+      POSTGRES_PASSWORD: rserve
+      POSTGRES_DB: rserve
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rserve"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  app_uploads:
+  # letsencrypt:

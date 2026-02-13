@@ -1,0 +1,32 @@
+# Base image for Rserve instances.
+# Build with: docker build --build-arg R_VERSION=4.4.1 -t rserve-base:4.4.1 .
+
+ARG R_VERSION=4.4.1
+FROM r-base:${R_VERSION}
+
+# Install system dependencies commonly needed by R packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    libfontconfig1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rserve and pak (for fast package installation in derived images)
+RUN R -e "install.packages(c('Rserve', 'pak'), repos='https://cloud.r-project.org')"
+
+# Default Rserve port
+EXPOSE 6311
+
+# Working directory for app code
+WORKDIR /app
+
+# Default command (overridden by app-specific images)
+CMD ["R", "-e", "Rserve::run.Rserve(port=6311L)"]
