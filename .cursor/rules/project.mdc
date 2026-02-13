@@ -1,0 +1,43 @@
+---
+description: Core project context and architecture decisions for rserve-proxy
+globs: **/*
+---
+
+# rserve-proxy — Project Context
+
+## What This Is
+A Docker Compose-deployed service for managing Rserve instances on a VPS.
+Consists of a Fastify API + React UI ("manager") behind Traefik reverse proxy,
+with PostgreSQL for state. Individual Rserve apps run in dynamically spawned
+Docker containers that Traefik auto-discovers via labels.
+
+## Architecture Decisions (settled)
+- **Language:** TypeScript
+- **API:** Fastify (not Next.js — this is a daemon, not a web app)
+- **UI:** Vite + React SPA (served as static files by Fastify in production)
+- **Database:** PostgreSQL via Drizzle ORM
+- **Proxy:** Traefik with Docker provider (label-based auto-discovery)
+- **Container management:** dockerode (TypeScript Docker API client)
+- **Monorepo:** Bun workspaces (`packages/api`, `packages/ui`, `packages/shared`)
+- **Package manager:** Bun (dev + install), Node.js (production runtime)
+- **Auth:** Session cookies for UI, Bearer tokens for API (hybrid)
+- **Rserve deployment:** One custom Docker image per app (R version + packages baked in)
+- **Code deployment:** Git clone or UI/API upload (Portainer-style)
+- **Commits:** Conventional Commits enforced via commitlint + husky
+
+## Key Design Principle: Spawner Isolation
+The spawner module (`packages/api/src/spawner/`) is self-contained and must
+remain independent of web/auth/proxy layers. It should be extractable into a
+standalone service in the future (like JupyterHub's Spawner architecture).
+See README.md for the full rules.
+
+## Implementation Roadmap
+See `todo.md` for the phased implementation plan. Update the "Working On"
+section at the bottom as you progress.
+
+## Dev Environment
+- `bun run docker:dev` starts Traefik + Postgres + Manager (dev ports)
+- `bun run dev` starts API (tsx watch) + UI (vite) locally
+- Postgres: localhost:5433 (dev), no .env file needed — all defaults work
+- `bun run db:push` to push schema, `bun run db:seed` for admin user
+- Default admin creds: admin / admin

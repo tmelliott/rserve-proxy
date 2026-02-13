@@ -15,7 +15,7 @@ hit `http://localhost:8880/api/health` and get a 200.
 - [x] Run Drizzle migrations on startup (or add a `db:push` script)
 - [x] Wire up the health route to return `{ status: "ok", db: true }` (ping Postgres)
 - [x] Add a `seed` script that creates an initial admin user (username + hashed password)
-- [ ] Confirm Traefik dashboard is accessible at `http://localhost:8881`
+- [x] Confirm Traefik dashboard is accessible at `http://localhost:8881`
 
 **Test:** `curl http://localhost:8880/api/health` → `200 OK`
 

@@ -1,0 +1,25 @@
+---
+description: Rules for working on the spawner module
+globs: packages/api/src/spawner/**
+---
+
+# Spawner Module Rules
+
+The spawner is a **self-contained module** responsible for all Rserve container
+lifecycle operations. It is designed to be extractable into a standalone
+service in the future.
+
+## Hard Rules
+1. The spawner must NOT import from or depend on web UI, auth, or HTTP layers
+2. All communication with the spawner must go through its public interface (`ISpawner`)
+3. The spawner manages its own state about running instances
+4. The manager calls the spawner; the spawner NEVER calls back into the manager
+5. All managed resources (containers, images) MUST have `managed-by=rserve-proxy` label
+
+## Interface
+The public contract is defined in `packages/shared/src/types/spawner.ts`.
+The Docker implementation is in `packages/api/src/spawner/docker-spawner.ts`.
+
+## Reference Architecture
+This follows the pattern established by JupyterHub's Spawner:
+https://jupyterhub.readthedocs.io/en/stable/reference/spawners.html

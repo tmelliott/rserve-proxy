@@ -1,0 +1,47 @@
+---
+description: How the agent should work with the user on this project
+globs: **/*
+---
+
+# Agent Workflow Rules
+
+## Research Before Implementing
+Before implementing any significant feature, research how similar well-known
+projects handle it. Key reference projects for this domain:
+- **JupyterHub** — spawner architecture, multi-user management
+- **ShinyProxy** — R app container orchestration
+- **Coolify** — self-hosted PaaS, Docker management UI
+- **Dokku** — mini-PaaS, git-push deployment
+- **Portainer** — Docker management UI, container lifecycle
+
+When there are multiple viable approaches, present them with cost/benefit
+analysis and let the user choose. Do NOT pick for them unless asked.
+
+## Ask One Question at a Time
+When clarifying architecture or design decisions, ask ONE question at a time.
+Do not dump a wall of questions. Wait for the answer before moving on.
+
+## Commit Early and Often
+Use conventional commits. Commit after each logical change rather than
+batching everything up. The user will often say "commit" — do it immediately.
+
+Scope tags: api, ui, shared, spawner, db, docker, traefik, deps, ci
+
+## Known Gotchas
+- **drizzle-orm type conflicts:** Bun workspaces can create duplicate
+  drizzle-orm installations causing type mismatches. When writing DB queries
+  outside the ORM (health checks, seed scripts, etc.), use the raw `client`
+  (postgres.js tagged template) exported from `db/index.ts` instead of
+  drizzle's `sql` helper.
+- **pino-pretty:** Dev-only dependency. Logger config in `index.ts` must
+  check `NODE_ENV` and only use pino-pretty transport in development.
+- **Bun workspace:* protocol:** npm doesn't understand it. The Dockerfile
+  uses a separate Bun stage (`prod-deps`) to resolve production dependencies.
+- **Docker API version:** Keep Traefik image up to date. Older versions
+  ship Docker clients that modern Docker engines reject.
+
+## Testing
+- Use `curl` to test API endpoints during development
+- Use the browser tools to test UI changes
+- The dev compose stack is isolated — dynamically spawned containers get
+  `managed-by=rserve-proxy` labels for easy identification and cleanup
