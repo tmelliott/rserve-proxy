@@ -1,5 +1,5 @@
 # Manager service Dockerfile
-# Multi-stage build: install deps + build, then run on Node
+# Multi-stage build: Bun for deps + build, Node for production runtime
 
 # --- Build stage ---
 FROM oven/bun:1 AS builder
@@ -25,24 +25,31 @@ RUN cd packages/shared && bun run build
 RUN cd packages/api && bun run build
 RUN cd packages/ui && bun run build
 
-# --- Production stage ---
+# --- Production deps (Bun resolves workspace:* protocol) ---
+FROM oven/bun:1 AS prod-deps
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/api/package.json packages/api/
+COPY packages/ui/package.json packages/ui/
+
+RUN bun install --frozen-lockfile --production --ignore-scripts
+
+# --- Production runtime ---
 FROM node:22-alpine
 WORKDIR /app
 
-# Copy built API
-COPY --from=builder /app/packages/api/dist packages/api/dist
-COPY --from=builder /app/packages/api/package.json packages/api/
+# Copy production node_modules (Bun hoists everything to root)
+COPY --from=prod-deps /app/node_modules ./node_modules
 
-# Copy built UI static files
-COPY --from=builder /app/packages/ui/dist packages/ui/dist
-
-# Copy shared dist
-COPY --from=builder /app/packages/shared/dist packages/shared/dist
+# Copy built artifacts + package.json for each workspace package
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/packages/shared/package.json packages/shared/
-
-# Copy root package.json and install production deps only
-COPY package.json ./
-RUN npm install --omit=dev --workspaces
+COPY --from=builder /app/packages/shared/dist packages/shared/dist
+COPY --from=builder /app/packages/api/package.json packages/api/
+COPY --from=builder /app/packages/api/dist packages/api/dist
+COPY --from=builder /app/packages/ui/dist packages/ui/dist
 
 EXPOSE 3000
 
