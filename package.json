@@ -8,6 +8,7 @@
     "lint": "bun run --filter '*' lint",
     "db:generate": "bun run --filter @rserve-proxy/api db:generate",
     "db:migrate": "bun run --filter @rserve-proxy/api db:migrate",
+    "db:push": "bun run --filter @rserve-proxy/api db:push",
     "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "docker:dev:detach": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d",
     "docker:full": "docker compose up --build",
