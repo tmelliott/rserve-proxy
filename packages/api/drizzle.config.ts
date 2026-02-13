@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ||
-      "postgres://rserve:rserve@localhost:5432/rserve",
+      "postgres://rserve:rserve@localhost:5433/rserve",
   },
 });
