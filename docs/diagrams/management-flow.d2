@@ -1,0 +1,112 @@
+Admin: {
+  shape: person
+  style: {
+    fill: "#e0f2fe"
+    stroke: "#0284c7"
+  }
+}
+
+Manager: {
+  label: |md
+    **Manager**
+    Fastify API
+  |
+  style: {
+    fill: "#dcfce7"
+    stroke: "#22c55e"
+    border-radius: 6
+  }
+}
+
+Spawner: {
+  label: |md
+    **Spawner**
+    Container lifecycle
+  |
+  style: {
+    fill: "#fef9c3"
+    stroke: "#eab308"
+    border-radius: 6
+  }
+}
+
+Docker API: {
+  label: |md
+    **Docker API**
+    Build · Run · Label
+  |
+  style: {
+    fill: "#f1f5f9"
+    stroke: "#94a3b8"
+    border-radius: 6
+  }
+}
+
+Traefik: {
+  label: |md
+    **Traefik**
+    Auto-discovery
+  |
+  style: {
+    fill: "#dbeafe"
+    stroke: "#3b82f6"
+    border-radius: 6
+  }
+}
+
+Admin -> Manager: "Create app\n(name, R version, packages, code)" {
+  style: {
+    stroke: "#22c55e"
+    stroke-width: 2
+  }
+}
+
+Manager -> Spawner: "startApp(config)" {
+  style: {
+    stroke: "#eab308"
+    stroke-width: 2
+  }
+}
+
+Spawner -> Docker API: "Build image\n(FROM rserve-base, install pkgs)" {
+  style.stroke: "#64748b"
+}
+
+Docker API -> Spawner: "Image built" {
+  style: {
+    stroke: "#94a3b8"
+    stroke-dash: 4
+  }
+}
+
+Spawner -> Docker API: "Create container\n(with Traefik labels)" {
+  style.stroke: "#64748b"
+}
+
+Docker API -> Spawner: "Container started" {
+  style: {
+    stroke: "#94a3b8"
+    stroke-dash: 4
+  }
+}
+
+Spawner -> Manager: "App running" {
+  style: {
+    stroke: "#eab308"
+    stroke-dash: 4
+  }
+}
+
+Manager -> Admin: "App deployed ✓" {
+  style: {
+    stroke: "#22c55e"
+    stroke-dash: 4
+  }
+}
+
+Traefik -> Docker API: "Auto-discovers new\ncontainer via Docker socket" {
+  style: {
+    stroke: "#3b82f6"
+    stroke-dash: 5
+  }
+}

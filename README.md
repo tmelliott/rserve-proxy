@@ -6,34 +6,9 @@ Rserve proxy for running and managing Rserve instances on a VPS.
 
 The system is deployed as a Docker Compose stack:
 
-```mermaid
-graph TD
-    Internet((Internet)) --> Traefik
-
-    subgraph compose["Docker Compose Stack"]
-        Traefik["🔀 Traefik\n:443 / :80\nauto-discovers containers\nvia Docker labels"]
-        Manager["🖥️ Manager\nFastify API + React UI"]
-        Postgres[("🗄️ PostgreSQL\nusers, tokens,\napp configs")]
-
-        subgraph spawner["Spawner Module (self-contained)"]
-            SpawnerCore["builds app Docker images\nstarts/stops Rserve containers\nhealth checks\nmanages via Docker API"]
-        end
-
-        Manager --- spawner
-        Manager --> Postgres
-    end
-
-    Traefik -- "/app1" --> App1
-    Traefik -- "/app2" --> App2
-    Traefik -- "/*" --> Manager
-
-    subgraph instances["Dynamically Spawned Rserve Containers"]
-        App1["📦 rserve-app1\nR 4.4 + packages"]
-        App2["📦 rserve-app2\nR 4.3 + packages"]
-    end
-
-    spawner -. "create/start/stop\n(via dockerode)" .-> instances
-```
+<p align="center">
+  <img src="docs/diagrams/architecture.svg" alt="Architecture diagram" width="100%" />
+</p>
 
 ### Services
 
@@ -73,40 +48,15 @@ graph TD
 
 ### Request Flow
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Traefik
-    participant Rserve as Rserve Container
-
-    Client->>Traefik: GET /app1/endpoint
-    Traefik->>Rserve: proxy (matched via Docker labels)
-    Rserve-->>Traefik: R response
-    Traefik-->>Client: response
-```
+<p align="center">
+  <img src="docs/diagrams/request-flow.svg" alt="Request flow diagram" width="100%" />
+</p>
 
 ### Management Flow
 
-```mermaid
-sequenceDiagram
-    participant Admin
-    participant Manager as Manager (API)
-    participant Spawner
-    participant Docker as Docker API
-    participant Traefik
-
-    Admin->>Manager: Create app (name, R version, packages, code source)
-    Manager->>Spawner: startApp(config)
-    Spawner->>Docker: Build image (FROM rserve-base, install packages, copy code)
-    Docker-->>Spawner: Image built
-    Spawner->>Docker: Create container (with Traefik labels)
-    Docker-->>Spawner: Container started
-    Spawner-->>Manager: App running
-    Manager-->>Admin: App deployed
-    Note over Traefik: Auto-discovers new container via Docker socket
-    Traefik->>Docker: Detects new labels
-    Note over Traefik: /app1 now routes to new container
-```
+<p align="center">
+  <img src="docs/diagrams/management-flow.svg" alt="Management flow diagram" width="100%" />
+</p>
 
 ### Tech Stack
 
@@ -149,7 +99,11 @@ rserve-proxy/
 ```bash
 bun install          # Install all workspace dependencies
 bun run dev          # Start API + UI in development mode
+bun run diagrams     # Regenerate architecture diagrams (requires d2)
 ```
+
+Diagrams are authored as [D2](https://d2lang.com/) source files in `docs/diagrams/`
+and rendered to SVG. Install D2 with `curl -fsSL https://d2lang.com/install.sh | sh`.
 
 ## License
 

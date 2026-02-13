@@ -1,0 +1,59 @@
+Client: {
+  shape: person
+  style: {
+    fill: "#e0f2fe"
+    stroke: "#0284c7"
+  }
+}
+
+Traefik: {
+  label: |md
+    **Traefik**
+    Reverse Proxy
+  |
+  style: {
+    fill: "#dbeafe"
+    stroke: "#3b82f6"
+    border-radius: 6
+  }
+}
+
+Rserve Container: {
+  label: |md
+    **Rserve Container**
+    R process
+  |
+  style: {
+    fill: "#fff1f2"
+    stroke: "#ef4444"
+    border-radius: 6
+  }
+}
+
+Client -> Traefik: "GET /app1/endpoint" {
+  style: {
+    stroke: "#3b82f6"
+    stroke-width: 2
+  }
+}
+
+Traefik -> Rserve Container: "proxy (matched via Docker labels)" {
+  style: {
+    stroke: "#ef4444"
+    stroke-width: 2
+  }
+}
+
+Rserve Container -> Traefik: "R response" {
+  style: {
+    stroke: "#94a3b8"
+    stroke-dash: 4
+  }
+}
+
+Traefik -> Client: response {
+  style: {
+    stroke: "#94a3b8"
+    stroke-dash: 4
+  }
+}

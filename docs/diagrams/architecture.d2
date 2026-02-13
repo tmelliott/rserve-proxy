@@ -1,0 +1,162 @@
+direction: down
+
+Internet.shape: cloud
+Internet.style: {
+  fill: "#e0f2fe"
+  stroke: "#0284c7"
+  font-color: "#0c4a6e"
+}
+
+Docker Compose Stack: {
+  style: {
+    fill: "#f8fafc"
+    stroke: "#94a3b8"
+    border-radius: 8
+    font-color: "#334155"
+    bold: true
+  }
+
+  Traefik: {
+    style: {
+      fill: "#dbeafe"
+      stroke: "#3b82f6"
+      border-radius: 6
+      font-color: "#1e40af"
+    }
+    label: |md
+      **Traefik**
+      Reverse proxy · :443 / :80
+      Auto-discovers via Docker labels
+    |
+  }
+
+  Manager: {
+    style: {
+      fill: "#dcfce7"
+      stroke: "#22c55e"
+      border-radius: 6
+      font-color: "#166534"
+    }
+
+    API: {
+      label: |md
+        **Fastify API**
+        Auth · Health · Apps
+      |
+      style: {
+        fill: "#f0fdf4"
+        stroke: "#86efac"
+        border-radius: 4
+      }
+    }
+
+    UI: {
+      label: |md
+        **React SPA**
+        Vite · Dashboard
+      |
+      style: {
+        fill: "#f0fdf4"
+        stroke: "#86efac"
+        border-radius: 4
+      }
+    }
+
+    Spawner: {
+      label: |md
+        **Spawner** *(self-contained)*
+        Build images · Start / stop
+        Health checks · dockerode
+      |
+      style: {
+        fill: "#fef9c3"
+        stroke: "#eab308"
+        border-radius: 4
+        font-color: "#854d0e"
+      }
+    }
+
+    API -> Spawner
+  }
+
+  PostgreSQL: {
+    shape: cylinder
+    label: |md
+      **PostgreSQL**
+      Users · Tokens · App configs
+    |
+    style: {
+      fill: "#dbeafe"
+      stroke: "#3b82f6"
+      border-radius: 6
+      font-color: "#1e40af"
+    }
+  }
+
+  Traefik -> Manager: "catch-all /*"
+  Manager.API -> PostgreSQL: queries
+}
+
+Rserve Instances: {
+  style: {
+    fill: "#fef2f2"
+    stroke: "#ef4444"
+    border-radius: 8
+    font-color: "#991b1b"
+    bold: true
+  }
+
+  app1: {
+    label: |md
+      **rserve-app1**
+      R 4.4 · custom packages
+    |
+    style: {
+      fill: "#fff1f2"
+      stroke: "#fca5a5"
+      border-radius: 4
+    }
+  }
+
+  app2: {
+    label: |md
+      **rserve-app2**
+      R 4.3 · custom packages
+    |
+    style: {
+      fill: "#fff1f2"
+      stroke: "#fca5a5"
+      border-radius: 4
+    }
+  }
+
+  app-n: {
+    label: |md
+      **rserve-app*n***
+      R *x.y* · custom packages
+    |
+    style: {
+      fill: "#fff1f2"
+      stroke: "#fca5a5"
+      border-radius: 4
+      opacity: 0.7
+    }
+  }
+}
+
+Internet -> Docker Compose Stack.Traefik: HTTPS {
+  style.stroke: "#0284c7"
+  style.stroke-width: 2
+}
+
+Docker Compose Stack.Traefik -> Rserve Instances.app1: "/app1" {
+  style.stroke: "#ef4444"
+}
+Docker Compose Stack.Traefik -> Rserve Instances.app2: "/app2" {
+  style.stroke: "#ef4444"
+}
+
+Docker Compose Stack.Manager.Spawner -> Rserve Instances: "create / start / stop" {
+  style.stroke: "#eab308"
+  style.stroke-dash: 5
+}
