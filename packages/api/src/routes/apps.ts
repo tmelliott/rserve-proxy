@@ -15,7 +15,9 @@ import {
 import type { AppConfig } from "@rserve-proxy/shared";
 
 /** Base directory for uploaded app code */
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads";
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ||
+  (process.env.NODE_ENV === "production" ? "/data/uploads" : "./data/uploads");
 
 // ---------------------------------------------------------------------------
 // Helpers
