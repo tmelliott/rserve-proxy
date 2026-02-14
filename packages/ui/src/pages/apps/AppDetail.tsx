@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Play,
@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
   ScrollText,
+  Upload,
 } from "lucide-react";
 import type { AppWithStatus } from "@rserve-proxy/shared";
 import { api, ApiError } from "../../lib/api.js";
@@ -236,6 +237,11 @@ export function AppDetail() {
         </dl>
       </div>
 
+      {/* Code (upload-type apps only) */}
+      {app.codeSource.type === "upload" && (
+        <CodeSection appId={app.id} entryScript={app.entryScript} setBanner={setBanner} />
+      )}
+
       {/* Containers */}
       {app.containers.length > 0 && (
         <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white">
@@ -329,6 +335,113 @@ function Row({
         {label}
       </dt>
       <dd className="text-sm text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
+function CodeSection({
+  appId,
+  entryScript,
+  setBanner,
+}: {
+  appId: string;
+  entryScript: string;
+  setBanner: (b: { type: "success" | "error"; message: string }) => void;
+}) {
+  const [code, setCode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveCode = async () => {
+    if (!code.trim()) return;
+    setSaving(true);
+    try {
+      const file = new File([code], entryScript, {
+        type: "text/plain",
+      });
+      await api.apps.upload(appId, file);
+      setBanner({ type: "success", message: `Saved ${entryScript}` });
+    } catch (err) {
+      setBanner({
+        type: "error",
+        message:
+          err instanceof ApiError ? err.message : "Failed to save code",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      await api.apps.upload(appId, file);
+      setBanner({ type: "success", message: `Uploaded ${file.name}` });
+    } catch (err) {
+      setBanner({
+        type: "error",
+        message:
+          err instanceof ApiError ? err.message : "Upload failed",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+        <h2 className="text-sm font-medium text-gray-700">Code</h2>
+      </div>
+      <div className="space-y-4 p-4">
+        {/* Manual code entry */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Write R code ({entryScript})
+          </label>
+          <textarea
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            rows={10}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+            placeholder={`# Enter your R code here\nlibrary(Rserve)\nRserve(args="--no-save")`}
+          />
+          <div className="mt-2">
+            <Button
+              size="sm"
+              onClick={handleSaveCode}
+              loading={saving}
+              disabled={!code.trim()}
+            >
+              Save Code
+            </Button>
+          </div>
+        </div>
+
+        {/* File upload */}
+        <div className="border-t border-gray-200 pt-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Or upload files
+          </label>
+          <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-gray-400">
+            <Upload className="h-4 w-4" />
+            {uploading
+              ? "Uploading..."
+              : "Choose .zip, .tar.gz, .tgz, or .R file"}
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".zip,.tar.gz,.tgz,.R"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file);
+              }}
+            />
+          </label>
+        </div>
+      </div>
     </div>
   );
 }
