@@ -540,8 +540,8 @@ describe("Role-based access", () => {
       url: "/api/apps",
       headers: { cookie },
     });
-    // 501 = Not Implemented (route exists but is a stub), NOT 401/403
-    expect(res.statusCode).toBe(501);
+    // Routes are now implemented — should return 200, NOT 401/403
+    expect(res.statusCode).toBe(200);
   });
 
   it("admin can access app routes", async () => {
@@ -552,6 +552,6 @@ describe("Role-based access", () => {
       url: "/api/apps",
       headers: { cookie },
     });
-    expect(res.statusCode).toBe(501); // stub, but accessible
+    expect(res.statusCode).toBe(200);
   });
 });

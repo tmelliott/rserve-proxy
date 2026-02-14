@@ -119,32 +119,43 @@ appears in `docker ps`, Traefik routes to it, and it responds to Rserve requests
 
 ---
 
-## Phase 3 — App Management API
+## Phase 3 — App Management API ✓
 
 **Goal:** Full CRUD for apps via REST API, backed by Postgres + Spawner.
 
-- [ ] `POST /api/apps` — validate input, insert into DB, return app config
-- [ ] `GET /api/apps` — list all apps (admin) or own apps (user), include live status from spawner
-- [ ] `GET /api/apps/:id` — app detail with spawner status + container info
-- [ ] `PUT /api/apps/:id` — update app config (name, packages, R version, replicas, etc.)
-- [ ] `DELETE /api/apps/:id` — stop containers, remove images, delete from DB
-- [ ] `POST /api/apps/:id/start` — trigger image build + container start
-- [ ] `POST /api/apps/:id/stop` — stop containers
-- [ ] `POST /api/apps/:id/restart` — restart containers
-- [ ] `POST /api/apps/:id/rebuild` — force rebuild image + restart
-- [ ] `GET /api/apps/:id/logs` — stream build/runtime logs (SSE or WebSocket)
+- [x] `POST /api/apps` — validate input, insert into DB, return app config
+- [x] `GET /api/apps` — list all apps (admin) or own apps (user), include live status from spawner
+- [x] `GET /api/apps/:id` — app detail with spawner status + container info
+- [x] `PUT /api/apps/:id` — update app config (name, packages, R version, replicas, etc.)
+- [x] `DELETE /api/apps/:id` — stop containers, remove images, delete from DB
+- [x] `POST /api/apps/:id/start` — trigger image build + container start
+- [x] `POST /api/apps/:id/stop` — stop containers
+- [x] `POST /api/apps/:id/restart` — restart containers
+- [x] `POST /api/apps/:id/rebuild` — force rebuild image + restart
+- [x] `GET /api/apps/:id/logs` — stream build/runtime logs (SSE)
 
-### Input Validation
+### Input Validation ✓
 
-- [ ] Add Typebox or Zod schemas for all request bodies
-- [ ] Validate slug uniqueness, R version format, package names, git URLs
+- [x] Add Typebox schemas for all request bodies (`apps.schemas.ts`)
+- [x] Validate slug uniqueness, R version format, package names, git URLs
+- [x] UUID validation on `:id` params
 
-### File Upload
+### File Upload ✓
 
-- [ ] Install `@fastify/multipart`
-- [ ] `POST /api/apps/:id/upload` — accept zip/tar of R code, store in `app_uploads` volume
-- [ ] Wire upload path into spawner's build context
-- [ ] Tests: app CRUD routes, input validation, auth guards on all endpoints
+- [x] Install `@fastify/multipart` (50 MB limit)
+- [x] `POST /api/apps/:id/upload` — accept zip/tar/R files, store in `app_uploads` volume
+- [x] Auto-extract `.tar.gz`, `.tgz`, `.zip` archives
+- [x] Wire upload path into spawner's build context
+
+### Wiring ✓
+
+- [x] Decorate Fastify with `spawner` and `healthMonitor` instances
+- [x] Start health monitor on `onReady`, stop on `onClose`
+- [x] `buildApp()` accepts optional `spawner`/`healthMonitor` overrides for testing
+
+### Tests ✓
+
+- [x] 35 app route tests: CRUD, lifecycle, auth guards, validation, upload (89 total)
 
 **Test:** Create an app via API, start it, confirm it's routable via Traefik,
 stop it, delete it.
