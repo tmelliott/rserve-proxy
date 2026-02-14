@@ -232,7 +232,9 @@ export function AppDetail() {
                 : "Upload"
             }
           />
-          <Row label="Entry Script" value={app.entryScript} />
+          {app.codeSource.type === "git" && (
+            <Row label="Entry Script" value={app.entryScript} />
+          )}
           <Row label="Replicas" value={String(app.replicas)} />
         </dl>
       </div>
@@ -352,6 +354,7 @@ function CodeSection({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [lastFile, setLastFile] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleSaveCode = async () => {
@@ -362,6 +365,7 @@ function CodeSection({
         type: "text/plain",
       });
       await api.apps.upload(appId, file);
+      setLastFile(entryScript);
       setBanner({ type: "success", message: `Saved ${entryScript}` });
     } catch (err) {
       setBanner({
@@ -380,6 +384,7 @@ function CodeSection({
     try {
       await api.apps.upload(appId, file);
       setUploadMessage(`Uploaded: ${file.name}`);
+      setLastFile(file.name);
       setBanner({ type: "success", message: `Uploaded ${file.name}` });
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Upload failed";
@@ -397,6 +402,11 @@ function CodeSection({
         <h2 className="text-sm font-medium text-gray-700">Code</h2>
       </div>
       <div className="space-y-4 p-4">
+        {lastFile && (
+          <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+            <span>Current file: <span className="font-medium">{lastFile}</span></span>
+          </div>
+        )}
         {/* Manual code entry */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
