@@ -42,14 +42,14 @@ authenticated requests. API tokens can be created for programmatic access.
 - [x] Extract `buildApp()` into `src/app.ts` for testability
 - [x] Add vitest + auth route tests (8 tests)
 
-### 1b. API Token Auth
+### 1b. API Token Auth ✓
 
-- [ ] Implement `POST /api/auth/tokens` — generate token, hash it, store in DB, return raw token once
-- [ ] Implement `GET /api/auth/tokens` — list tokens for current user (prefix only)
-- [ ] Implement `DELETE /api/auth/tokens/:id` — revoke token
-- [ ] Extend `requireAuth` to also accept `Authorization: Bearer <token>` header
-- [ ] Tokens should check `expiresAt` and update `lastUsedAt`
-- [ ] Tests: token CRUD, Bearer auth, expired token rejection
+- [x] Implement `POST /api/auth/tokens` — generate token (nanoid), SHA-256 hash, store in DB, return raw token once
+- [x] Implement `GET /api/auth/tokens` — list tokens for current user (prefix only)
+- [x] Implement `DELETE /api/auth/tokens/:id` — revoke token (own tokens only)
+- [x] Extend `requireAuth` to also accept `Authorization: Bearer <token>` header
+- [x] Tokens check `expiresAt` and update `lastUsedAt` (fire-and-forget)
+- [x] Tests: token CRUD, Bearer auth, expired/invalid token rejection (12 new tests)
 
 ### 1c. Role-Based Access (light)
 
@@ -230,5 +230,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 1b — API Token Auth
-**Completed:** Phase 0 ✓, Phase 1a — Session Auth ✓
+**Current phase:** 1c — Role-Based Access
+**Completed:** Phase 0 ✓, Phase 1a ✓, Phase 1b ✓

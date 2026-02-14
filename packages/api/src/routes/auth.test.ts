@@ -1,26 +1,36 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import { hash } from "argon2";
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
 // ---------------------------------------------------------------------------
 // Mock the DB module so tests don't need a running Postgres.
 //
-// vi.mock is hoisted above all imports, so this runs before buildApp loads
-// the auth routes. We expose `mockRows` so each test can control what the
-// next DB query returns.
+// Uses a queue: each `await db.xxx()...` call pops the next result set.
+// Tests push expected results via `queueRows(...)` before each request.
 // ---------------------------------------------------------------------------
-let mockRows: unknown[] = [];
+const rowsQueue: unknown[][] = [];
+
+function queueRows(...batches: unknown[][]) {
+  batches.forEach((b) => rowsQueue.push(b));
+}
 
 /** Creates a chainable object that mimics Drizzle's query builder */
 function chain(): Record<string, any> {
   const self: Record<string, any> = {};
-  // Every method returns the chain, except awaiting it resolves mockRows
-  for (const m of ["select", "from", "where", "limit", "orderBy", "leftJoin"]) {
+  const methods = [
+    "select", "from", "where", "limit", "orderBy", "leftJoin",
+    "insert", "values", "returning",
+    "delete",
+    "update", "set",
+  ];
+  for (const m of methods) {
     self[m] = vi.fn((..._args: unknown[]) => chain());
   }
-  // Make the chain thenable so `await db.select().from()...` works
-  self.then = (resolve: (v: unknown) => void, _reject?: unknown) =>
-    resolve(mockRows);
+  // Resolve with next queued result when awaited.
+  // Return a real Promise so .then().catch() chains work.
+  self.then = (resolve?: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+    Promise.resolve(rowsQueue.shift() ?? []).then(resolve, reject);
   return self;
 }
 
@@ -35,8 +45,6 @@ vi.mock("../db/index.js", () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Now import buildApp (which imports the mocked db module)
 // ---------------------------------------------------------------------------
 import { buildApp } from "../app.js";
 
@@ -53,6 +61,13 @@ const TEST_USER = {
   updatedAt: new Date("2025-01-01"),
 };
 
+const TEST_TOKEN_ID = "00000000-0000-0000-0000-000000000099";
+
+/** Hash a token the same way the app does */
+function sha256(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -64,11 +79,16 @@ beforeAll(async () => {
   await app.ready();
 });
 
+beforeEach(() => {
+  // Clear any leftover queued rows between tests
+  rowsQueue.length = 0;
+});
+
 afterAll(async () => {
   await app.close();
 });
 
-/** Helper: extract the sessionId cookie from a response */
+/** Extract the sessionId cookie from a response */
 function getSessionCookie(res: { headers: Record<string, unknown> }): string {
   const raw = res.headers["set-cookie"];
   if (typeof raw === "string") return raw.split(";")[0];
@@ -76,9 +96,20 @@ function getSessionCookie(res: { headers: Record<string, unknown> }): string {
   return "";
 }
 
-// ---------------------------------------------------------------------------
+/** Login helper — returns the session cookie */
+async function login(): Promise<string> {
+  queueRows([TEST_USER]);
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: { username: "admin", password: "admin" },
+  });
+  return getSessionCookie(res);
+}
+
+// ===========================================================================
 // POST /api/auth/login
-// ---------------------------------------------------------------------------
+// ===========================================================================
 describe("POST /api/auth/login", () => {
   it("returns 400 when body is missing", async () => {
     const res = await app.inject({
@@ -91,8 +122,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("returns 401 for unknown user", async () => {
-    mockRows = []; // no user found
-
+    queueRows([]);
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
@@ -103,8 +133,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("returns 401 for wrong password", async () => {
-    mockRows = [TEST_USER];
-
+    queueRows([TEST_USER]);
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
@@ -115,15 +144,13 @@ describe("POST /api/auth/login", () => {
   });
 
   it("returns 200 and user profile on valid credentials", async () => {
-    mockRows = [TEST_USER];
-
+    queueRows([TEST_USER]);
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
       payload: { username: "admin", password: "admin" },
     });
     expect(res.statusCode).toBe(200);
-
     const body = res.json();
     expect(body.user.id).toBe(TEST_USER.id);
     expect(body.user.username).toBe("admin");
@@ -132,8 +159,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("sets a session cookie on successful login", async () => {
-    mockRows = [TEST_USER];
-
+    queueRows([TEST_USER]);
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
@@ -144,38 +170,26 @@ describe("POST /api/auth/login", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // GET /api/auth/me
-// ---------------------------------------------------------------------------
+// ===========================================================================
 describe("GET /api/auth/me", () => {
   it("returns 401 without a session", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/auth/me",
-    });
+    // requireAuth will try Bearer lookup → no header → 401
+    const res = await app.inject({ method: "GET", url: "/api/auth/me" });
     expect(res.statusCode).toBe(401);
   });
 
-  it("returns the user when authenticated", async () => {
-    // Step 1: login to get a session cookie
-    mockRows = [TEST_USER];
-    const loginRes = await app.inject({
-      method: "POST",
-      url: "/api/auth/login",
-      payload: { username: "admin", password: "admin" },
-    });
-    const cookie = getSessionCookie(loginRes);
+  it("returns the user when authenticated via session", async () => {
+    const cookie = await login();
 
-    // Step 2: set mockRows for the /me query (different shape — no passwordHash)
-    mockRows = [
-      {
-        id: TEST_USER.id,
-        username: TEST_USER.username,
-        email: TEST_USER.email,
-        role: TEST_USER.role,
-        createdAt: TEST_USER.createdAt,
-      },
-    ];
+    queueRows([{
+      id: TEST_USER.id,
+      username: TEST_USER.username,
+      email: TEST_USER.email,
+      role: TEST_USER.role,
+      createdAt: TEST_USER.createdAt,
+    }]);
 
     const res = await app.inject({
       method: "GET",
@@ -187,21 +201,13 @@ describe("GET /api/auth/me", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // POST /api/auth/logout
-// ---------------------------------------------------------------------------
+// ===========================================================================
 describe("POST /api/auth/logout", () => {
   it("destroys the session so /me returns 401", async () => {
-    // Login
-    mockRows = [TEST_USER];
-    const loginRes = await app.inject({
-      method: "POST",
-      url: "/api/auth/login",
-      payload: { username: "admin", password: "admin" },
-    });
-    const cookie = getSessionCookie(loginRes);
+    const cookie = await login();
 
-    // Logout
     const logoutRes = await app.inject({
       method: "POST",
       url: "/api/auth/logout",
@@ -217,5 +223,232 @@ describe("POST /api/auth/logout", () => {
       headers: { cookie },
     });
     expect(meRes.statusCode).toBe(401);
+  });
+});
+
+// ===========================================================================
+// POST /api/auth/tokens
+// ===========================================================================
+describe("POST /api/auth/tokens", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/tokens",
+      payload: { name: "test" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 400 when name is missing", async () => {
+    const cookie = await login();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/tokens",
+      payload: {},
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/name/i);
+  });
+
+  it("creates a token and returns the raw value once", async () => {
+    const cookie = await login();
+
+    // Queue the insert().values().returning() result
+    queueRows([{
+      id: TEST_TOKEN_ID,
+      name: "My Token",
+      tokenHash: "hash",
+      tokenPrefix: "rsp_abcd1234",
+      userId: TEST_USER.id,
+      expiresAt: null,
+      lastUsedAt: null,
+      createdAt: new Date(),
+    }]);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/tokens",
+      payload: { name: "My Token" },
+      headers: { cookie },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.token.name).toBe("My Token");
+    expect(body.token.token).toMatch(/^rsp_/); // raw token returned
+    expect(body.token.tokenPrefix).toBeDefined();
+    expect(body.token.id).toBe(TEST_TOKEN_ID);
+  });
+
+  it("creates a token with expiration", async () => {
+    const cookie = await login();
+
+    queueRows([{
+      id: TEST_TOKEN_ID,
+      name: "Expiring Token",
+      tokenHash: "hash",
+      tokenPrefix: "rsp_abcd1234",
+      userId: TEST_USER.id,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      lastUsedAt: null,
+      createdAt: new Date(),
+    }]);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/tokens",
+      payload: { name: "Expiring Token", expiresInDays: 30 },
+      headers: { cookie },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().token.expiresAt).toBeDefined();
+  });
+});
+
+// ===========================================================================
+// GET /api/auth/tokens
+// ===========================================================================
+describe("GET /api/auth/tokens", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/tokens",
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("lists tokens for the current user", async () => {
+    const cookie = await login();
+
+    queueRows([
+      {
+        id: TEST_TOKEN_ID,
+        name: "Token A",
+        tokenPrefix: "rsp_aaaa1111",
+        userId: TEST_USER.id,
+        expiresAt: null,
+        lastUsedAt: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/tokens",
+      headers: { cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.tokens).toHaveLength(1);
+    expect(body.tokens[0].name).toBe("Token A");
+    // Should NOT include the hash or raw token
+    expect(body.tokens[0]).not.toHaveProperty("tokenHash");
+    expect(body.tokens[0]).not.toHaveProperty("token");
+  });
+});
+
+// ===========================================================================
+// DELETE /api/auth/tokens/:id
+// ===========================================================================
+describe("DELETE /api/auth/tokens/:id", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/auth/tokens/${TEST_TOKEN_ID}`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("deletes an existing token", async () => {
+    const cookie = await login();
+
+    queueRows([{ id: TEST_TOKEN_ID }]); // delete returning
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/auth/tokens/${TEST_TOKEN_ID}`,
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+  });
+
+  it("returns 404 for non-existent token", async () => {
+    const cookie = await login();
+
+    queueRows([]); // delete returning empty
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/auth/tokens/00000000-0000-0000-0000-nonexistent0",
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// ===========================================================================
+// Bearer token authentication
+// ===========================================================================
+describe("Bearer token auth", () => {
+  const RAW_TOKEN = "rsp_test-token-value-for-bearer-auth-testing";
+  const TOKEN_HASH = sha256(RAW_TOKEN);
+
+  it("authenticates via Authorization: Bearer header", async () => {
+    queueRows(
+      // 1. requireAuth: select token + join user
+      [{
+        tokenId: TEST_TOKEN_ID,
+        userId: TEST_USER.id,
+        expiresAt: null,
+        role: "admin",
+      }],
+      // 2. requireAuth: update lastUsedAt (fire-and-forget)
+      [],
+      // 3. /me route: select user profile
+      [{
+        id: TEST_USER.id,
+        username: TEST_USER.username,
+        email: TEST_USER.email,
+        role: TEST_USER.role,
+        createdAt: TEST_USER.createdAt,
+      }],
+    );
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${RAW_TOKEN}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.username).toBe("admin");
+  });
+
+  it("rejects an invalid Bearer token", async () => {
+    // Token lookup returns nothing
+    queueRows([]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: "Bearer rsp_invalid-token-value" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects an expired Bearer token", async () => {
+    // Token lookup returns nothing (the WHERE clause filters expired tokens)
+    queueRows([]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${RAW_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(401);
   });
 });

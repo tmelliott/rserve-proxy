@@ -1,11 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verify } from "argon2";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
-import { requireAuth } from "../hooks/require-auth.js";
+import { users, apiTokens } from "../db/schema.js";
+import { requireAuth, hashToken } from "../hooks/require-auth.js";
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
+  // -----------------------------------------------------------------------
+  // Session auth
+  // -----------------------------------------------------------------------
+
   /**
    * POST /api/auth/login
    *
@@ -93,20 +98,107 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ user });
   });
 
-  // --- Token routes (Phase 1b stubs) ---
+  // -----------------------------------------------------------------------
+  // API Token auth
+  // -----------------------------------------------------------------------
 
-  app.post("/tokens", async (request, reply) => {
-    // TODO: Create API token (Phase 1b)
-    return reply.status(501).send({ error: "Not implemented" });
+  /**
+   * POST /api/auth/tokens
+   *
+   * Create a new API token. The raw token is returned ONCE in the response.
+   * Accepts { name, expiresInDays? }.
+   */
+  app.post<{
+    Body: { name: string; expiresInDays?: number };
+  }>("/tokens", { onRequest: requireAuth }, async (request, reply) => {
+    const { name, expiresInDays } = request.body ?? {};
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return reply.status(400).send({ error: "Token name is required" });
+    }
+
+    // Generate a random token: rsp_ prefix + 40 chars of nanoid
+    const rawToken = `rsp_${nanoid(40)}`;
+    const tokenHash = hashToken(rawToken);
+    const tokenPrefix = rawToken.slice(0, 12); // "rsp_" + first 8 random chars
+
+    const expiresAt = expiresInDays
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+      : null;
+
+    const [token] = await db
+      .insert(apiTokens)
+      .values({
+        name: name.trim(),
+        tokenHash,
+        tokenPrefix,
+        userId: request.session.userId!,
+        expiresAt,
+      })
+      .returning();
+
+    return reply.status(201).send({
+      token: {
+        id: token.id,
+        name: token.name,
+        token: rawToken, // Only returned on creation
+        tokenPrefix: token.tokenPrefix,
+        userId: token.userId,
+        expiresAt: token.expiresAt,
+        lastUsedAt: token.lastUsedAt,
+        createdAt: token.createdAt,
+      },
+    });
   });
 
-  app.get("/tokens", async (request, reply) => {
-    // TODO: List API tokens for current user (Phase 1b)
-    return reply.status(501).send({ error: "Not implemented" });
+  /**
+   * GET /api/auth/tokens
+   *
+   * List all API tokens for the current user.
+   * Returns prefix only — never the raw token or hash.
+   */
+  app.get("/tokens", { onRequest: requireAuth }, async (request, reply) => {
+    const tokens = await db
+      .select({
+        id: apiTokens.id,
+        name: apiTokens.name,
+        tokenPrefix: apiTokens.tokenPrefix,
+        userId: apiTokens.userId,
+        expiresAt: apiTokens.expiresAt,
+        lastUsedAt: apiTokens.lastUsedAt,
+        createdAt: apiTokens.createdAt,
+      })
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, request.session.userId!))
+      .orderBy(apiTokens.createdAt);
+
+    return reply.send({ tokens });
   });
 
-  app.delete("/tokens/:id", async (request, reply) => {
-    // TODO: Revoke API token (Phase 1b)
-    return reply.status(501).send({ error: "Not implemented" });
+  /**
+   * DELETE /api/auth/tokens/:id
+   *
+   * Revoke (delete) an API token. Users can only revoke their own tokens.
+   */
+  app.delete<{
+    Params: { id: string };
+  }>("/tokens/:id", { onRequest: requireAuth }, async (request, reply) => {
+    const { id } = request.params;
+
+    const deleted = await db
+      .delete(apiTokens)
+      .where(
+        and(
+          eq(apiTokens.id, id),
+          eq(apiTokens.userId, request.session.userId!),
+        ),
+      )
+      .returning({ id: apiTokens.id });
+
+    if (deleted.length === 0) {
+      return reply.status(404).send({ error: "Token not found" });
+    }
+
+    return reply.send({ ok: true });
   });
 };
