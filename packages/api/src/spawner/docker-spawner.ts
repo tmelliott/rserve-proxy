@@ -271,48 +271,188 @@ export class DockerSpawner implements ISpawner {
   }
 
   // -----------------------------------------------------------------------
-  // Lifecycle (stubs — Phase 2c)
+  // Container Lifecycle
   // -----------------------------------------------------------------------
 
   async startApp(options: StartAppOptions): Promise<void> {
-    // TODO: Build image if needed, then create + start container(s)
-    // 1. Build image (or use provided imageName)
-    // 2. For each replica: create container with Traefik labels
-    // 3. Connect to Docker network
-    // 4. Start container
-    throw new Error("Not implemented");
+    const { appConfig } = options;
+    const slug = appConfig.slug;
+
+    // 1. Determine or build the image
+    let image: string;
+    if (options.imageName) {
+      image = options.imageName;
+    } else {
+      const result = await this.buildImage({ appConfig });
+      if (!result.success) {
+        throw new Error(`Image build failed for "${slug}": ${result.error}`);
+      }
+      image = `${result.imageName}:${result.imageTag}`;
+    }
+
+    // 2. Create + start a container for each replica
+    for (let i = 0; i < appConfig.replicas; i++) {
+      const containerName = `rserve-${slug}-${i}`;
+
+      // Traefik labels for auto-discovery.
+      // Each replica is part of the same Traefik service so Traefik
+      // load-balances across them.
+      const labels: Record<string, string> = {
+        [MANAGED_LABEL]: MANAGED_VALUE,
+        [APP_ID_LABEL]: appConfig.id,
+        "traefik.enable": "true",
+        [`traefik.http.routers.${slug}.rule`]: `PathPrefix(\`/${slug}\`)`,
+        [`traefik.http.routers.${slug}.entrypoints`]: "web",
+        [`traefik.http.services.${slug}.loadbalancer.server.port`]:
+          String(RSERVE_PORT),
+        // Strip the prefix so Rserve sees / not /slug
+        [`traefik.http.middlewares.${slug}-strip.stripprefix.prefixes`]:
+          `/${slug}`,
+        [`traefik.http.routers.${slug}.middlewares`]: `${slug}-strip`,
+      };
+
+      const container = await this.docker.createContainer({
+        Image: image,
+        name: containerName,
+        Labels: labels,
+        ExposedPorts: { [`${RSERVE_PORT}/tcp`]: {} },
+        HostConfig: {
+          // No published ports — Traefik reaches containers via the shared
+          // Docker network. Container port is declared in the Traefik
+          // service label above.
+          NetworkMode: this.networkName,
+        },
+      });
+
+      await container.start();
+    }
   }
 
   async stopApp(appId: string): Promise<void> {
-    // TODO: Stop and remove all containers for this app
-    throw new Error("Not implemented");
+    const containers = await this.listManagedContainers(appId);
+    for (const info of containers) {
+      const container = this.docker.getContainer(info.Id);
+      if (info.State === "running") {
+        await container.stop();
+      }
+      await container.remove();
+    }
   }
 
   async restartApp(appId: string): Promise<void> {
-    // TODO: Stop then start all containers
-    throw new Error("Not implemented");
+    const containers = await this.listManagedContainers(appId);
+    for (const info of containers) {
+      const container = this.docker.getContainer(info.Id);
+      await container.restart();
+    }
   }
 
   async getAppStatus(appId: string): Promise<AppStatus> {
-    // TODO: Query Docker for container state, derive app status
-    throw new Error("Not implemented");
+    const containers = await this.listManagedContainers(appId);
+
+    if (containers.length === 0) return "stopped";
+
+    // If any container is in an error state, the app is in error
+    const hasError = containers.some(
+      (c) => c.State === "exited" || c.State === "dead",
+    );
+    if (hasError) return "error";
+
+    // If all are running, the app is running
+    const allRunning = containers.every((c) => c.State === "running");
+    if (allRunning) return "running";
+
+    // If a build is in progress, report building
+    if (this.buildLogs.has(appId)) return "building";
+
+    // Otherwise, it's somewhere in between
+    return "starting";
   }
 
   async getContainers(appId: string): Promise<ContainerInfo[]> {
-    // TODO: List containers with label filter for this app
-    throw new Error("Not implemented");
+    const containers = await this.listManagedContainers(appId);
+
+    return containers.map((c) => ({
+      containerId: c.Id.slice(0, 12),
+      status: c.State ?? "unknown",
+      healthStatus: parseHealthStatus(c.Status),
+      startedAt: c.Created ? new Date(c.Created * 1000) : undefined,
+      port: RSERVE_PORT,
+    }));
   }
 
   async streamBuildLogs(
     appId: string,
     onLog: (line: string) => void,
   ): Promise<void> {
-    // TODO: Stream build output in real time
-    throw new Error("Not implemented");
+    // Replay any existing log lines first
+    const existing = this.buildLogs.get(appId);
+    if (existing) {
+      for (const line of existing) onLog(line);
+    }
+
+    // Register listener for new lines
+    return new Promise<void>((resolve) => {
+      if (!this.buildListeners.has(appId)) {
+        this.buildListeners.set(appId, new Set());
+      }
+      const listeners = this.buildListeners.get(appId)!;
+      const listener = (line: string) => {
+        onLog(line);
+      };
+      listeners.add(listener);
+
+      // Clean up when the build finishes (caller should await buildImage
+      // separately; this resolves when the build log entry is removed)
+      const interval = setInterval(() => {
+        if (!this.buildLogs.has(appId)) {
+          listeners.delete(listener);
+          if (listeners.size === 0) this.buildListeners.delete(appId);
+          clearInterval(interval);
+          resolve();
+        }
+      }, 500);
+    });
   }
 
   async cleanup(appId: string): Promise<void> {
-    // TODO: Remove stopped containers and dangling images
-    throw new Error("Not implemented");
+    // 1. Remove stopped containers for this app
+    const containers = await this.listManagedContainers(appId);
+    for (const info of containers) {
+      if (info.State !== "running") {
+        await this.docker.getContainer(info.Id).remove({ force: true });
+      }
+    }
+
+    // 2. Remove dangling images for this app
+    const images = await this.docker.listImages({
+      filters: {
+        label: [
+          `${MANAGED_LABEL}=${MANAGED_VALUE}`,
+          `${APP_ID_LABEL}=${appId}`,
+        ],
+        dangling: ["true"],
+      },
+    });
+    for (const img of images) {
+      await this.docker.getImage(img.Id).remove({ force: true }).catch(() => {
+        // Image may be in use — ignore
+      });
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+
+/** Extract a health status hint from Docker's Status string (e.g. "Up 5m (healthy)") */
+function parseHealthStatus(
+  status?: string,
+): "healthy" | "unhealthy" | "starting" | undefined {
+  if (!status) return undefined;
+  if (status.includes("healthy")) return "healthy";
+  if (status.includes("unhealthy")) return "unhealthy";
+  if (status.includes("starting")) return "starting";
+  return undefined;
 }
