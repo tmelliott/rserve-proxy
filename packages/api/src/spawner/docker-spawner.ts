@@ -92,6 +92,11 @@ function generateDockerfile(cfg: AppConfig): string {
     "",
     `EXPOSE ${RSERVE_PORT}`,
     "",
+    // Health check: attempt a TCP connection to the Rserve port.
+    // bash's /dev/tcp is the simplest zero-dependency check.
+    `HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \\`,
+    `  CMD bash -c "echo > /dev/tcp/localhost/${RSERVE_PORT}" || exit 1`,
+    "",
     `CMD ["R", "-e", "source('/app/${cfg.entryScript}')"]`,
     "",
   );

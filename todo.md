@@ -104,11 +104,15 @@ container that Traefik auto-discovers.
 - [x] Implement `DockerSpawner.streamBuildLogs()` — stream build output via callback
 - [x] Tests: spawner unit tests with mocked dockerode (21 tests, 46 total)
 
-### 2d. Health Checking
+### 2d. Health Checking ✓
 
-- [ ] Add a periodic health check loop in the spawner (or manager) that pings each running container
-- [ ] Update container health status in memory (spawner state)
-- [ ] Expose health info via `getAppStatus()`
+- [x] Add Docker HEALTHCHECK to generated Dockerfiles (TCP check on Rserve port)
+- [x] Add `HealthMonitor` class with periodic polling loop
+- [x] Auto-discover untracked containers from Docker
+- [x] Cache per-app health snapshots in memory
+- [x] `onStatusChange` callback for status transitions
+- [x] Expose health info via `getSnapshot()` / `getAllSnapshots()`
+- [x] Tests: health monitor with mocked spawner (8 tests, 54 total)
 
 **Test:** Manually call spawner methods from a test script → confirm container
 appears in `docker ps`, Traefik routes to it, and it responds to Rserve requests.

@@ -16,4 +16,6 @@
  */
 
 export { DockerSpawner } from "./docker-spawner.js";
+export { HealthMonitor } from "./health-monitor.js";
+export type { AppHealthSnapshot, HealthMonitorOptions } from "./health-monitor.js";
 export type { ISpawner } from "@rserve-proxy/shared";
