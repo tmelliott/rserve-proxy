@@ -35,7 +35,7 @@ See README.md for the full rules.
 See `todo.md` for the phased implementation plan. Update the "Working On"
 section at the bottom as you progress.
 
-**Current phase:** 1a — Session Auth (Phase 0 complete ✓)
+**Current phase:** 1b — API Token Auth (Phase 0 ✓, Phase 1a ✓)
 
 ## Dev Environment
 - `bun run docker:dev` starts Traefik + Postgres + Manager (dev ports)

@@ -3,6 +3,11 @@
 > Phased plan for `rserve-proxy`. Each phase builds on the previous and ends
 > with a working, testable slice of the system. Phases are ordered by
 > dependency — later phases assume earlier ones are complete.
+>
+> **Testing policy:** Every phase must include vitest unit/integration tests
+> for new functionality. Tests use `app.inject()` with mocked DB so they
+> run without Postgres. Run `bun run test` to verify nothing is broken
+> before committing.
 
 ---
 
@@ -26,14 +31,16 @@ hit `http://localhost:8880/api/health` and get a 200.
 **Goal:** Admin can log in via the API, get a session cookie, and make
 authenticated requests. API tokens can be created for programmatic access.
 
-### 1a. Session Auth
+### 1a. Session Auth ✓
 
-- [ ] Install + configure `@fastify/session` (or `@fastify/secure-session`) with a cookie store
-- [ ] Install `argon2` (or `bcrypt`) for password hashing
-- [ ] Implement `POST /api/auth/login` — validate credentials, create session, set cookie
-- [ ] Implement `POST /api/auth/logout` — destroy session, clear cookie
-- [ ] Implement `GET /api/auth/me` — return current user from session
-- [ ] Create `requireAuth` middleware/hook that rejects unauthenticated requests
+- [x] Install + configure `@fastify/session` with in-memory cookie store
+- [x] Install `argon2` for password hashing
+- [x] Implement `POST /api/auth/login` — validate credentials, create session, set cookie
+- [x] Implement `POST /api/auth/logout` — destroy session, clear cookie
+- [x] Implement `GET /api/auth/me` — return current user from session
+- [x] Create `requireAuth` middleware/hook that rejects unauthenticated requests
+- [x] Extract `buildApp()` into `src/app.ts` for testability
+- [x] Add vitest + auth route tests (8 tests)
 
 ### 1b. API Token Auth
 
@@ -42,12 +49,14 @@ authenticated requests. API tokens can be created for programmatic access.
 - [ ] Implement `DELETE /api/auth/tokens/:id` — revoke token
 - [ ] Extend `requireAuth` to also accept `Authorization: Bearer <token>` header
 - [ ] Tokens should check `expiresAt` and update `lastUsedAt`
+- [ ] Tests: token CRUD, Bearer auth, expired token rejection
 
 ### 1c. Role-Based Access (light)
 
 - [ ] Admin role can manage all apps and users
 - [ ] User role can only manage their own apps and tokens
 - [ ] Add `requireAdmin` guard for admin-only routes (e.g., user management)
+- [ ] Tests: admin vs user role access, requireAdmin guard
 
 **Test:** Login via `curl`, use the cookie to hit `/api/auth/me`, create a
 token, use it in `Authorization: Bearer` header.
@@ -92,6 +101,7 @@ container that Traefik auto-discovers.
 - [ ] Implement `DockerSpawner.getContainers()` — return container info list
 - [ ] Implement `DockerSpawner.cleanup()` — remove stopped containers + dangling images for app
 - [ ] Implement `DockerSpawner.streamBuildLogs()` — stream build output via callback
+- [ ] Tests: spawner unit tests with mocked dockerode
 
 ### 2d. Health Checking
 
@@ -129,6 +139,7 @@ appears in `docker ps`, Traefik routes to it, and it responds to Rserve requests
 - [ ] Install `@fastify/multipart`
 - [ ] `POST /api/apps/:id/upload` — accept zip/tar of R code, store in `app_uploads` volume
 - [ ] Wire upload path into spawner's build context
+- [ ] Tests: app CRUD routes, input validation, auth guards on all endpoints
 
 **Test:** Create an app via API, start it, confirm it's routable via Traefik,
 stop it, delete it.
@@ -219,5 +230,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 1a — Session Auth
-**Completed:** Phase 0 — Dev Stack Boots ✓
+**Current phase:** 1b — API Token Auth
+**Completed:** Phase 0 ✓, Phase 1a — Session Auth ✓
