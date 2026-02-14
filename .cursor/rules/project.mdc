@@ -35,7 +35,7 @@ See README.md for the full rules.
 See `todo.md` for the phased implementation plan. Update the "Working On"
 section at the bottom as you progress.
 
-**Current phase:** 1c — Role-Based Access (Phase 0 ✓, Phase 1a ✓, Phase 1b ✓)
+**Current phase:** 2 — Spawner Core (Phase 0 ✓, Phase 1 ✓)
 
 ## Dev Environment
 - `bun run docker:dev` starts Traefik + Postgres + Manager (dev ports)

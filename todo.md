@@ -51,12 +51,13 @@ authenticated requests. API tokens can be created for programmatic access.
 - [x] Tokens check `expiresAt` and update `lastUsedAt` (fire-and-forget)
 - [x] Tests: token CRUD, Bearer auth, expired/invalid token rejection (12 new tests)
 
-### 1c. Role-Based Access (light)
+### 1c. Role-Based Access (light) ✓
 
-- [ ] Admin role can manage all apps and users
-- [ ] User role can only manage their own apps and tokens
-- [ ] Add `requireAdmin` guard for admin-only routes (e.g., user management)
-- [ ] Tests: admin vs user role access, requireAdmin guard
+- [x] Admin role can manage all apps and users
+- [x] User role can only manage their own apps and tokens
+- [x] `requireAdmin` guard ready for admin-only routes
+- [x] `requireAuth` applied to all app routes at plugin level
+- [x] Tests: admin vs user role access, app route auth guards (5 new tests, 25 total)
 
 **Test:** Login via `curl`, use the cookie to hit `/api/auth/me`, create a
 token, use it in `Authorization: Bearer` header.
@@ -230,5 +231,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 1c — Role-Based Access
-**Completed:** Phase 0 ✓, Phase 1a ✓, Phase 1b ✓
+**Current phase:** 2 — Spawner Core
+**Completed:** Phase 0 ✓, Phase 1 — Authentication ✓

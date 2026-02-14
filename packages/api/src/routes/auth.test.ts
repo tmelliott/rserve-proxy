@@ -61,6 +61,16 @@ const TEST_USER = {
   updatedAt: new Date("2025-01-01"),
 };
 
+const TEST_REGULAR_USER = {
+  id: "00000000-0000-0000-0000-000000000002",
+  username: "user1",
+  email: "user1@localhost",
+  passwordHash: "", // set in beforeAll
+  role: "user" as const,
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
+};
+
 const TEST_TOKEN_ID = "00000000-0000-0000-0000-000000000099";
 
 /** Hash a token the same way the app does */
@@ -75,6 +85,7 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   TEST_USER.passwordHash = await hash("admin");
+  TEST_REGULAR_USER.passwordHash = await hash("password");
   app = await buildApp({ logger: false });
   await app.ready();
 });
@@ -97,12 +108,15 @@ function getSessionCookie(res: { headers: Record<string, unknown> }): string {
 }
 
 /** Login helper — returns the session cookie */
-async function login(): Promise<string> {
-  queueRows([TEST_USER]);
+async function login(
+  user: typeof TEST_USER | typeof TEST_REGULAR_USER = TEST_USER,
+  password = "admin",
+): Promise<string> {
+  queueRows([user]);
   const res = await app.inject({
     method: "POST",
     url: "/api/auth/login",
-    payload: { username: "admin", password: "admin" },
+    payload: { username: user.username, password },
   });
   return getSessionCookie(res);
 }
@@ -450,5 +464,94 @@ describe("Bearer token auth", () => {
       headers: { authorization: `Bearer ${RAW_TOKEN}` },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// ===========================================================================
+// Role-based access (Phase 1c)
+// ===========================================================================
+describe("Role-based access", () => {
+  it("regular user can access requireAuth routes", async () => {
+    const cookie = await login(TEST_REGULAR_USER, "password");
+
+    // /me should work for any authenticated user
+    queueRows([{
+      id: TEST_REGULAR_USER.id,
+      username: TEST_REGULAR_USER.username,
+      email: TEST_REGULAR_USER.email,
+      role: TEST_REGULAR_USER.role,
+      createdAt: TEST_REGULAR_USER.createdAt,
+    }]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.role).toBe("user");
+  });
+
+  it("regular user can manage their own tokens", async () => {
+    const cookie = await login(TEST_REGULAR_USER, "password");
+
+    // List tokens
+    queueRows([]);
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/api/auth/tokens",
+      headers: { cookie },
+    });
+    expect(listRes.statusCode).toBe(200);
+
+    // Create token
+    queueRows([{
+      id: TEST_TOKEN_ID,
+      name: "User Token",
+      tokenHash: "hash",
+      tokenPrefix: "rsp_usertkn1",
+      userId: TEST_REGULAR_USER.id,
+      expiresAt: null,
+      lastUsedAt: null,
+      createdAt: new Date(),
+    }]);
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/auth/tokens",
+      payload: { name: "User Token" },
+      headers: { cookie },
+    });
+    expect(createRes.statusCode).toBe(201);
+  });
+
+  it("app routes require authentication", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/apps",
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("authenticated user can access app routes", async () => {
+    const cookie = await login(TEST_REGULAR_USER, "password");
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/apps",
+      headers: { cookie },
+    });
+    // 501 = Not Implemented (route exists but is a stub), NOT 401/403
+    expect(res.statusCode).toBe(501);
+  });
+
+  it("admin can access app routes", async () => {
+    const cookie = await login();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/apps",
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(501); // stub, but accessible
   });
 });
