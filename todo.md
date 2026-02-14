@@ -231,6 +231,10 @@ API directly.
 
 ## Stretch Goals (Future)
 
+- [ ] Reduce amount of code needed in the manual upload method
+  - automatically add Rserve::run.Rserve() with arguments (modified through UI)
+  - websockets should *always* be on i.e., we now enforce some stuff
+  - port should be set to 6311 ? as traefik does the routing
 - [ ] Multi-user workspace isolation
 - [ ] Dependency scanning — auto-detect `library()` / `::` calls in uploaded R code
 - [ ] Git webhook integration — auto-rebuild on push
