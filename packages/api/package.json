@@ -13,12 +13,14 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "docker:cleanup": "tsx src/scripts/cleanup.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.4.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@fastify/session": "^11.0.0",
     "@fastify/static": "^8.0.0",
     "@rserve-proxy/shared": "workspace:*",

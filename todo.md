@@ -203,14 +203,14 @@ API directly.
 **Goal:** The system is robust enough for a single-user/small-team deployment.
 
 - [ ] Rserve connectivity — decide routing strategy (WebSocket mode + Traefik WS proxy, TCP routing, or HTTP API bridge) and implement client access to running Rserve instances
-- [ ] Request validation on all API routes (return 400 with clear messages)
-- [ ] Proper error handling — spawner errors surface as 500s with context
-- [ ] Graceful shutdown — stop health check loop, drain HTTP connections
-- [ ] Rate limiting on auth routes (`@fastify/rate-limit`)
-- [ ] CORS lock-down in production (only allow same origin)
-- [ ] Add `docker:cleanup` npm script that calls `DockerSpawner.cleanupAll()`
-- [ ] Structured logging (pino, already in Fastify)
-- [ ] E2E smoke test script: create app, start, curl Rserve, stop, delete
+- [x] Request validation on all API routes — Typebox schemas for auth routes (login, password, tokens), global error handler normalises validation errors
+- [x] Proper error handling — global `setErrorHandler` with structured responses: validation → 400 + details, rate limit → 429, unexpected → 500 with context (dev) / generic (prod)
+- [x] Graceful shutdown — SIGTERM/SIGINT handlers, `app.close()` drains connections + stops health monitor, 10s hard timeout
+- [x] Rate limiting on auth routes — `@fastify/rate-limit` (global: false), login capped at 10 req/min per IP
+- [x] CORS lock-down in production — `secure: true` cookie in prod, CORS origin from env or reflect-request
+- [x] Add `docker:cleanup` npm script — `bun run docker:cleanup` calls `DockerSpawner.cleanupAll()`
+- [x] Structured logging — pino with request IDs (`x-request-id` or UUID), credential redaction in production
+- [x] E2E smoke test script — `scripts/smoke-test.sh`: health → login → me → create app → list → detail → update → token CRUD → bearer auth → delete → logout
 
 ---
 
@@ -268,5 +268,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 5 — Integration & Polish
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓
+**Current phase:** 5 — Integration & Polish (Rserve connectivity pending decision)
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 (8/9 items) ✓

@@ -5,6 +5,12 @@ import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
 import { users, apiTokens } from "../db/schema.js";
 import { requireAuth, hashToken } from "../hooks/require-auth.js";
+import {
+  LoginBody,
+  ChangePasswordBody,
+  CreateTokenBody,
+  TokenIdParams,
+} from "./auth.schemas.js";
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   // -----------------------------------------------------------------------
@@ -16,49 +22,55 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    *
    * Accepts { username, password }, verifies credentials against the DB,
    * and creates a session. Returns the user profile on success.
+   *
+   * Rate limited: 10 attempts per minute per IP.
    */
-  app.post<{
-    Body: { username: string; password: string };
-  }>("/login", async (request, reply) => {
-    const { username, password } = request.body ?? {};
-
-    if (!username || !password) {
-      return reply
-        .status(400)
-        .send({ error: "Username and password are required" });
-    }
-
-    // Look up user
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username))
-      .limit(1);
-
-    if (!user) {
-      return reply.status(401).send({ error: "Invalid credentials" });
-    }
-
-    // Verify password
-    const valid = await verify(user.passwordHash, password);
-    if (!valid) {
-      return reply.status(401).send({ error: "Invalid credentials" });
-    }
-
-    // Store user info in session
-    request.session.userId = user.id;
-    request.session.role = user.role;
-
-    return reply.send({
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt,
+  app.post<{ Body: LoginBody }>(
+    "/login",
+    {
+      schema: { body: LoginBody },
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
       },
-    });
-  });
+    },
+    async (request, reply) => {
+      const { username, password } = request.body;
+
+      // Look up user
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, username))
+        .limit(1);
+
+      if (!user) {
+        return reply.status(401).send({ error: "Invalid credentials" });
+      }
+
+      // Verify password
+      const valid = await verify(user.passwordHash, password);
+      if (!valid) {
+        return reply.status(401).send({ error: "Invalid credentials" });
+      }
+
+      // Store user info in session
+      request.session.userId = user.id;
+      request.session.role = user.role;
+
+      return reply.send({
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt,
+        },
+      });
+    },
+  );
 
   /**
    * POST /api/auth/logout
@@ -106,51 +118,43 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * PUT /api/auth/password
    *
    * Change the current user's password. Requires the current password for
-   * verification plus the new password.
+   * verification plus the new password (min 8 chars, enforced by schema).
    */
-  app.put<{
-    Body: { currentPassword: string; newPassword: string };
-  }>("/password", { onRequest: requireAuth }, async (request, reply) => {
-    const { currentPassword, newPassword } = request.body ?? {};
+  app.put<{ Body: ChangePasswordBody }>(
+    "/password",
+    { schema: { body: ChangePasswordBody }, onRequest: requireAuth },
+    async (request, reply) => {
+      const { currentPassword, newPassword } = request.body;
 
-    if (!currentPassword || !newPassword) {
-      return reply
-        .status(400)
-        .send({ error: "Current password and new password are required" });
-    }
+      // Look up user
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, request.session.userId!))
+        .limit(1);
 
-    if (newPassword.length < 8) {
-      return reply
-        .status(400)
-        .send({ error: "New password must be at least 8 characters" });
-    }
+      if (!user) {
+        return reply.status(401).send({ error: "User not found" });
+      }
 
-    // Look up user
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, request.session.userId!))
-      .limit(1);
+      // Verify current password
+      const valid = await verify(user.passwordHash, currentPassword);
+      if (!valid) {
+        return reply
+          .status(403)
+          .send({ error: "Current password is incorrect" });
+      }
 
-    if (!user) {
-      return reply.status(401).send({ error: "User not found" });
-    }
+      // Hash and save new password
+      const newHash = await hash(newPassword);
+      await db
+        .update(users)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
 
-    // Verify current password
-    const valid = await verify(user.passwordHash, currentPassword);
-    if (!valid) {
-      return reply.status(403).send({ error: "Current password is incorrect" });
-    }
-
-    // Hash and save new password
-    const newHash = await hash(newPassword);
-    await db
-      .update(users)
-      .set({ passwordHash: newHash, updatedAt: new Date() })
-      .where(eq(users.id, user.id));
-
-    return reply.send({ ok: true });
-  });
+      return reply.send({ ok: true });
+    },
+  );
 
   // -----------------------------------------------------------------------
   // API Token auth
@@ -162,48 +166,46 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * Create a new API token. The raw token is returned ONCE in the response.
    * Accepts { name, expiresInDays? }.
    */
-  app.post<{
-    Body: { name: string; expiresInDays?: number };
-  }>("/tokens", { onRequest: requireAuth }, async (request, reply) => {
-    const { name, expiresInDays } = request.body ?? {};
+  app.post<{ Body: CreateTokenBody }>(
+    "/tokens",
+    { schema: { body: CreateTokenBody }, onRequest: requireAuth },
+    async (request, reply) => {
+      const { name, expiresInDays } = request.body;
 
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      return reply.status(400).send({ error: "Token name is required" });
-    }
+      // Generate a random token: rsp_ prefix + 40 chars of nanoid
+      const rawToken = `rsp_${nanoid(40)}`;
+      const tokenHash = hashToken(rawToken);
+      const tokenPrefix = rawToken.slice(0, 12); // "rsp_" + first 8 random chars
 
-    // Generate a random token: rsp_ prefix + 40 chars of nanoid
-    const rawToken = `rsp_${nanoid(40)}`;
-    const tokenHash = hashToken(rawToken);
-    const tokenPrefix = rawToken.slice(0, 12); // "rsp_" + first 8 random chars
+      const expiresAt = expiresInDays
+        ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+        : null;
 
-    const expiresAt = expiresInDays
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
-      : null;
+      const [token] = await db
+        .insert(apiTokens)
+        .values({
+          name: name.trim(),
+          tokenHash,
+          tokenPrefix,
+          userId: request.session.userId!,
+          expiresAt,
+        })
+        .returning();
 
-    const [token] = await db
-      .insert(apiTokens)
-      .values({
-        name: name.trim(),
-        tokenHash,
-        tokenPrefix,
-        userId: request.session.userId!,
-        expiresAt,
-      })
-      .returning();
-
-    return reply.status(201).send({
-      token: {
-        id: token.id,
-        name: token.name,
-        token: rawToken, // Only returned on creation
-        tokenPrefix: token.tokenPrefix,
-        userId: token.userId,
-        expiresAt: token.expiresAt,
-        lastUsedAt: token.lastUsedAt,
-        createdAt: token.createdAt,
-      },
-    });
-  });
+      return reply.status(201).send({
+        token: {
+          id: token.id,
+          name: token.name,
+          token: rawToken, // Only returned on creation
+          tokenPrefix: token.tokenPrefix,
+          userId: token.userId,
+          expiresAt: token.expiresAt,
+          lastUsedAt: token.lastUsedAt,
+          createdAt: token.createdAt,
+        },
+      });
+    },
+  );
 
   /**
    * GET /api/auth/tokens
@@ -234,25 +236,27 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    *
    * Revoke (delete) an API token. Users can only revoke their own tokens.
    */
-  app.delete<{
-    Params: { id: string };
-  }>("/tokens/:id", { onRequest: requireAuth }, async (request, reply) => {
-    const { id } = request.params;
+  app.delete<{ Params: TokenIdParams }>(
+    "/tokens/:id",
+    { schema: { params: TokenIdParams }, onRequest: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params;
 
-    const deleted = await db
-      .delete(apiTokens)
-      .where(
-        and(
-          eq(apiTokens.id, id),
-          eq(apiTokens.userId, request.session.userId!),
-        ),
-      )
-      .returning({ id: apiTokens.id });
+      const deleted = await db
+        .delete(apiTokens)
+        .where(
+          and(
+            eq(apiTokens.id, id),
+            eq(apiTokens.userId, request.session.userId!),
+          ),
+        )
+        .returning({ id: apiTokens.id });
 
-    if (deleted.length === 0) {
-      return reply.status(404).send({ error: "Token not found" });
-    }
+      if (deleted.length === 0) {
+        return reply.status(404).send({ error: "Token not found" });
+      }
 
-    return reply.send({ ok: true });
-  });
+      return reply.send({ ok: true });
+    },
+  );
 };

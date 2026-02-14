@@ -132,7 +132,10 @@ describe("POST /api/auth/login", () => {
       payload: {},
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/required/i);
+    // Typebox schema validation returns structured error
+    const body = res.json();
+    expect(body.error).toBe("Validation failed");
+    expect(body.details).toBeDefined();
   });
 
   it("returns 401 for unknown user", async () => {
@@ -262,7 +265,10 @@ describe("POST /api/auth/tokens", () => {
       headers: { cookie },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/name/i);
+    // Typebox schema validation returns structured error
+    const body = res.json();
+    expect(body.error).toBe("Validation failed");
+    expect(body.details).toBeDefined();
   });
 
   it("creates a token and returns the raw value once", async () => {
@@ -397,7 +403,7 @@ describe("DELETE /api/auth/tokens/:id", () => {
 
     const res = await app.inject({
       method: "DELETE",
-      url: "/api/auth/tokens/00000000-0000-0000-0000-nonexistent0",
+      url: "/api/auth/tokens/00000000-0000-0000-0000-ffffffffffff",
       headers: { cookie },
     });
     expect(res.statusCode).toBe(404);
