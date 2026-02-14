@@ -167,12 +167,12 @@ stop it, delete it.
 **Goal:** A functional admin dashboard for managing apps without touching the
 API directly.
 
-### 4a. Foundation
+### 4a. Foundation ✓
 
-- [ ] Set up Tailwind CSS (already in devDeps, wire up config)
-- [ ] Create a layout shell: sidebar nav, top bar with user info + logout
-- [ ] Auth context provider — check `/api/auth/me` on load, redirect to login if unauthenticated
-- [ ] Login page — form, error handling, redirect to dashboard on success
+- [x] Set up Tailwind CSS (already in devDeps, wire up config)
+- [x] Create a layout shell: sidebar nav, top bar with user info + logout
+- [x] Auth context provider — check `/api/auth/me` on load, redirect to login if unauthenticated
+- [x] Login page — form, error handling, redirect to dashboard on success
 
 ### 4b. Dashboard
 
@@ -247,5 +247,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 2 — Spawner Core
-**Completed:** Phase 0 ✓, Phase 1 — Authentication ✓
+**Current phase:** 4 — Web UI (sub-phase 4b — Dashboard)
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4a — Foundation ✓
