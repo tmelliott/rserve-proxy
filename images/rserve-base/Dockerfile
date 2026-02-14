@@ -1,7 +1,7 @@
 # Base image for Rserve instances.
-# Build with: docker build --build-arg R_VERSION=4.4.1 -t rserve-base:4.4.1 .
+# Build with: docker build --build-arg R_VERSION=latest -t rserve-base:latest .
 
-ARG R_VERSION=4.4.1
+ARG R_VERSION=latest
 FROM r-base:${R_VERSION}
 
 # Install system dependencies commonly needed by R packages
