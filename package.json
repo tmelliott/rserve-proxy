@@ -18,6 +18,7 @@
     "docker:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f",
     "diagrams": "d2 --layout elk docs/diagrams/architecture.d2 docs/diagrams/architecture.svg && d2 --layout elk docs/diagrams/request-flow.d2 docs/diagrams/request-flow.svg && d2 --layout elk docs/diagrams/management-flow.d2 docs/diagrams/management-flow.svg",
     "test": "bun run --filter @rserve-proxy/api test",
+    "ci": "bun run lint && bun run build && bun run test",
     "prepare": "husky"
   },
   "devDependencies": {
