@@ -7,6 +7,7 @@ import { AppNew } from "./pages/apps/AppNew.js";
 import { AppDetail } from "./pages/apps/AppDetail.js";
 import { AppEdit } from "./pages/apps/AppEdit.js";
 import { AppLogs } from "./pages/apps/AppLogs.js";
+import { TokenList } from "./pages/tokens/TokenList.js";
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
             <Route path="apps/:id" element={<AppDetail />} />
             <Route path="apps/:id/edit" element={<AppEdit />} />
             <Route path="apps/:id/logs" element={<AppLogs />} />
+            <Route path="tokens" element={<TokenList />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

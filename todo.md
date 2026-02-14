@@ -188,9 +188,9 @@ API directly.
 - [x] Log viewer — scrollable, auto-follow build/runtime logs
 - [x] Delete confirmation dialog
 
-### 4d. Settings & Tokens
+### 4d. Settings & Tokens ✓
 
-- [ ] API tokens page — list tokens, create new, copy-once, revoke
+- [x] API tokens page — list tokens, create new, copy-once, revoke
 - [ ] User profile / password change (stretch)
 
 **Test:** Walk through the full UI flow: login → create app → start → view logs
@@ -247,5 +247,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 4 — Web UI (sub-phase 4d — Tokens)
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4a — Foundation ✓
+**Current phase:** 5 — Integration & Polish
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 — Web UI ✓
