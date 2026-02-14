@@ -41,6 +41,13 @@ export interface AppWithStatus extends AppConfig {
   containers: ContainerInfo[];
   /** Error message if status is "error" */
   error?: string;
+  /**
+   * WebSocket connection path when running (e.g. "/my-app/").
+   * JS clients connect via `http://<host>/<slug>/` — the Rserve JS
+   * client handles the WebSocket upgrade internally.
+   * Only present when status is "running".
+   */
+  wsPath?: string;
 }
 
 /** Info about a single running container */

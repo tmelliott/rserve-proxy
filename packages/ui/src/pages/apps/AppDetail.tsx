@@ -9,6 +9,8 @@ import {
   Trash2,
   ScrollText,
   Upload,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { AppWithStatus } from "@rserve-proxy/shared";
 import { api, ApiError } from "../../lib/api.js";
@@ -239,6 +241,11 @@ export function AppDetail() {
         </dl>
       </div>
 
+      {/* Connection info — shown when app is running */}
+      {app.wsPath && (
+        <ConnectionInfo wsPath={app.wsPath} />
+      )}
+
       {/* Code (upload-type apps only) */}
       {app.codeSource.type === "upload" && (
         <CodeSection appId={app.id} entryScript={app.entryScript} setBanner={setBanner} />
@@ -337,6 +344,55 @@ function Row({
         {label}
       </dt>
       <dd className="text-sm text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
+function ConnectionInfo({ wsPath }: { wsPath: string }) {
+  const [copied, setCopied] = useState(false);
+  const wsUrl = `${window.location.origin}${wsPath}`;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(wsUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const snippet = `import Rserve from "rserve";\n\nconst client = Rserve.create({\n  host: "${wsUrl}",\n});`;
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-lg border border-green-200 bg-green-50">
+      <div className="border-b border-green-200 bg-green-100 px-4 py-3">
+        <h2 className="text-sm font-medium text-green-800">
+          Connection — WebSocket
+        </h2>
+      </div>
+      <div className="space-y-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <code className="flex-1 rounded bg-white px-3 py-1.5 font-mono text-sm text-gray-800 ring-1 ring-green-200">
+            {wsUrl}
+          </code>
+          <button
+            onClick={handleCopy}
+            className="rounded p-1.5 text-green-700 hover:bg-green-100"
+            title="Copy URL"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium text-green-800">
+            JavaScript usage
+          </summary>
+          <pre className="mt-2 overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-gray-700 ring-1 ring-green-200">
+            {snippet}
+          </pre>
+        </details>
+      </div>
     </div>
   );
 }

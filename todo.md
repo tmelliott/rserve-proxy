@@ -202,7 +202,7 @@ API directly.
 
 **Goal:** The system is robust enough for a single-user/small-team deployment.
 
-- [ ] Rserve connectivity — decide routing strategy (WebSocket mode + Traefik WS proxy, TCP routing, or HTTP API bridge) and implement client access to running Rserve instances
+- [x] Rserve connectivity — WebSocket mode: Rserv.conf injected into generated Dockerfiles (`http.port 8081`), Traefik labels route to WS port, API returns `wsPath` when running, UI shows connection URL + JS snippet
 - [x] Request validation on all API routes — Typebox schemas for auth routes (login, password, tokens), global error handler normalises validation errors
 - [x] Proper error handling — global `setErrorHandler` with structured responses: validation → 400 + details, rate limit → 429, unexpected → 500 with context (dev) / generic (prod)
 - [x] Graceful shutdown — SIGTERM/SIGINT handlers, `app.close()` drains connections + stops health monitor, 10s hard timeout
@@ -268,5 +268,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 5 — Integration & Polish (Rserve connectivity pending decision)
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 (8/9 items) ✓
+**Current phase:** 6 — Production Hardening
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 ✓

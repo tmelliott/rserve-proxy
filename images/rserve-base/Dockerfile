@@ -22,8 +22,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Rserve and pak (for fast package installation in derived images)
 RUN R -e "install.packages(c('Rserve', 'pak'), repos='https://cloud.r-project.org')"
 
-# Default Rserve port
-EXPOSE 6311
+# Default Rserve port (QAP binary protocol) + HTTP/WebSocket port
+EXPOSE 6311 8081
+
+# Rserve config: enable HTTP+WebSocket transport for JS clients.
+# run.Rserve() reads /etc/Rserv.conf by default.
+RUN printf 'remote enable\nhttp.port 8081\n' > /etc/Rserv.conf
 
 # Working directory for app code
 WORKDIR /app

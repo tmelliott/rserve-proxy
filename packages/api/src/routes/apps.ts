@@ -134,7 +134,8 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
         const status = snapshot?.status ?? (await app.spawner.getAppStatus(row.id));
         const containers =
           snapshot?.containers ?? (await app.spawner.getContainers(row.id));
-        return { ...config, status, containers };
+        const wsPath = status === "running" ? `/${config.slug}/` : undefined;
+        return { ...config, status, containers, wsPath };
       }),
     );
 
@@ -171,8 +172,9 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
       const status = snapshot?.status ?? (await app.spawner.getAppStatus(id));
       const containers =
         snapshot?.containers ?? (await app.spawner.getContainers(id));
+      const wsPath = status === "running" ? `/${config.slug}/` : undefined;
 
-      return reply.send({ app: { ...config, status, containers } });
+      return reply.send({ app: { ...config, status, containers, wsPath } });
     },
   );
 

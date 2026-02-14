@@ -258,7 +258,7 @@ describe("startApp", () => {
     );
     expect(
       createArg.Labels["traefik.http.services.test-app.loadbalancer.server.port"],
-    ).toBe("6311");
+    ).toBe("8081");
     expect(createArg.Labels["managed-by"]).toBe("rserve-proxy");
     expect(createArg.Labels["rserve-proxy.app-id"]).toBe(cfg.id);
     expect(mockStart).toHaveBeenCalledOnce();
@@ -420,7 +420,7 @@ describe("getContainers", () => {
     expect(containers[0].containerId).toBe("abc123def456");
     expect(containers[0].status).toBe("running");
     expect(containers[0].healthStatus).toBe("healthy");
-    expect(containers[0].port).toBe(6311);
+    expect(containers[0].port).toBe(8081);
     expect(containers[0].startedAt).toBeInstanceOf(Date);
   });
 

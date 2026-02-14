@@ -38,8 +38,11 @@ const MANAGED_LABEL = "managed-by";
 const MANAGED_VALUE = "rserve-proxy";
 const APP_ID_LABEL = "rserve-proxy.app-id";
 
-/** Default Rserve port inside the container */
+/** Default Rserve QAP (binary) port inside the container */
 const RSERVE_PORT = 6311;
+
+/** Rserve HTTP / WebSocket port inside the container */
+const RSERVE_WS_PORT = 8081;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,9 +93,14 @@ function generateDockerfile(cfg: AppConfig): string {
   lines.push(
     "COPY code/ /app/",
     "",
-    `EXPOSE ${RSERVE_PORT}`,
+    // Rserve configuration: enable WebSocket/HTTP transport on port 8081.
+    // The QAP binary port (6311) remains for health checks and native clients.
+    // When user code calls run.Rserve(), it reads /etc/Rserv.conf automatically.
+    `RUN printf 'remote enable\\nhttp.port ${RSERVE_WS_PORT}\\n' > /etc/Rserv.conf`,
     "",
-    // Health check: attempt a TCP connection to the Rserve port.
+    `EXPOSE ${RSERVE_PORT} ${RSERVE_WS_PORT}`,
+    "",
+    // Health check: attempt a TCP connection to the Rserve QAP port.
     // bash's /dev/tcp is the simplest zero-dependency check.
     `HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \\`,
     `  CMD bash -c "echo > /dev/tcp/localhost/${RSERVE_PORT}" || exit 1`,
@@ -302,6 +310,10 @@ export class DockerSpawner implements ISpawner {
       // Traefik labels for auto-discovery.
       // Each replica is part of the same Traefik service so Traefik
       // load-balances across them.
+      //
+      // Routes to the Rserve HTTP/WebSocket port (8081), NOT the QAP
+      // binary port (6311). JS clients connect via WebSocket through
+      // Traefik at /<slug>/ — Traefik handles the WS upgrade automatically.
       const labels: Record<string, string> = {
         [MANAGED_LABEL]: MANAGED_VALUE,
         [APP_ID_LABEL]: appConfig.id,
@@ -309,7 +321,7 @@ export class DockerSpawner implements ISpawner {
         [`traefik.http.routers.${slug}.rule`]: `PathPrefix(\`/${slug}\`)`,
         [`traefik.http.routers.${slug}.entrypoints`]: "web",
         [`traefik.http.services.${slug}.loadbalancer.server.port`]:
-          String(RSERVE_PORT),
+          String(RSERVE_WS_PORT),
         // Strip the prefix so Rserve sees / not /slug
         [`traefik.http.middlewares.${slug}-strip.stripprefix.prefixes`]:
           `/${slug}`,
@@ -320,7 +332,10 @@ export class DockerSpawner implements ISpawner {
         Image: image,
         name: containerName,
         Labels: labels,
-        ExposedPorts: { [`${RSERVE_PORT}/tcp`]: {} },
+        ExposedPorts: {
+          [`${RSERVE_PORT}/tcp`]: {},
+          [`${RSERVE_WS_PORT}/tcp`]: {},
+        },
         HostConfig: {
           // No published ports — Traefik reaches containers via the shared
           // Docker network. Container port is declared in the Traefik
@@ -382,7 +397,7 @@ export class DockerSpawner implements ISpawner {
       status: c.State ?? "unknown",
       healthStatus: parseHealthStatus(c.Status),
       startedAt: c.Created ? new Date(c.Created * 1000) : undefined,
-      port: RSERVE_PORT,
+      port: RSERVE_WS_PORT,
     }));
   }
 
