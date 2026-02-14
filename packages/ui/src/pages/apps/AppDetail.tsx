@@ -351,6 +351,7 @@ function CodeSection({
   const [code, setCode] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleSaveCode = async () => {
@@ -375,17 +376,18 @@ function CodeSection({
 
   const handleFileUpload = async (file: File) => {
     setUploading(true);
+    setUploadMessage("");
     try {
       await api.apps.upload(appId, file);
+      setUploadMessage(`Uploaded: ${file.name}`);
       setBanner({ type: "success", message: `Uploaded ${file.name}` });
     } catch (err) {
-      setBanner({
-        type: "error",
-        message:
-          err instanceof ApiError ? err.message : "Upload failed",
-      });
+      const msg = err instanceof ApiError ? err.message : "Upload failed";
+      setUploadMessage(`Error: ${msg}`);
+      setBanner({ type: "error", message: msg });
     } finally {
       setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -432,7 +434,7 @@ function CodeSection({
             <input
               ref={fileRef}
               type="file"
-              accept=".zip,.tar.gz,.tgz,.R"
+              accept=".zip,.gz,.tgz,.R"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -440,6 +442,11 @@ function CodeSection({
               }}
             />
           </label>
+          {uploadMessage && (
+            <p className={`mt-1 text-xs ${uploadMessage.startsWith("Error") ? "text-red-600" : "text-green-600"}`}>
+              {uploadMessage}
+            </p>
+          )}
         </div>
       </div>
     </div>
