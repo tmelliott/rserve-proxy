@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { Box, Key } from "lucide-react";
+import { Box, Key, UserCircle } from "lucide-react";
 import clsx from "clsx";
 
 const links = [
   { to: "/", label: "Apps", icon: Box },
   { to: "/tokens", label: "API Tokens", icon: Key },
+  { to: "/profile", label: "Profile", icon: UserCircle },
 ] as const;
 
 export function Sidebar() {

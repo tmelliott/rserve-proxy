@@ -191,7 +191,7 @@ API directly.
 ### 4d. Settings & Tokens ✓
 
 - [x] API tokens page — list tokens, create new, copy-once, revoke
-- [ ] User profile / password change (stretch)
+- [x] User profile / password change
 
 **Test:** Walk through the full UI flow: login → create app → start → view logs
 → verify it's live → stop → delete.
@@ -243,9 +243,26 @@ API directly.
 
 ---
 
+## Known Issues
+
+> Investigate these once all phases are complete.
+
+1. **Start rebuilds image unnecessarily** — Stopping a running app and then
+   clicking "Start" triggers a full image rebuild. The `/start` endpoint
+   always calls `buildImage` → `startApp` instead of reusing the existing
+   image when config hasn't changed. Should only rebuild on explicit
+   "Rebuild" action.
+
+2. **Containers list slow to update** — After stopping an app, the container
+   list on the detail page takes a while to reflect the change. Likely the
+   health monitor polling interval is too long or the UI isn't re-fetching
+   quickly enough after a stop action completes.
+
+---
+
 ## Working On
 
 > Update this section as you work through the phases.
 
 **Current phase:** 5 — Integration & Polish
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 — Web UI ✓
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓

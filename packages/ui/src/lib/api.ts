@@ -51,6 +51,11 @@ export const api = {
       }),
     revokeToken: (id: string) =>
       request<{ ok: true }>(`/api/auth/tokens/${id}`, { method: "DELETE" }),
+    changePassword: (body: { currentPassword: string; newPassword: string }) =>
+      request<{ ok: true }>("/api/auth/password", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
   },
   apps: {
     list: () => request<{ apps: AppWithStatus[] }>("/api/apps"),

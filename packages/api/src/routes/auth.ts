@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { verify } from "argon2";
+import { hash, verify } from "argon2";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
@@ -96,6 +96,60 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.send({ user });
+  });
+
+  // -----------------------------------------------------------------------
+  // Password change
+  // -----------------------------------------------------------------------
+
+  /**
+   * PUT /api/auth/password
+   *
+   * Change the current user's password. Requires the current password for
+   * verification plus the new password.
+   */
+  app.put<{
+    Body: { currentPassword: string; newPassword: string };
+  }>("/password", { onRequest: requireAuth }, async (request, reply) => {
+    const { currentPassword, newPassword } = request.body ?? {};
+
+    if (!currentPassword || !newPassword) {
+      return reply
+        .status(400)
+        .send({ error: "Current password and new password are required" });
+    }
+
+    if (newPassword.length < 8) {
+      return reply
+        .status(400)
+        .send({ error: "New password must be at least 8 characters" });
+    }
+
+    // Look up user
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, request.session.userId!))
+      .limit(1);
+
+    if (!user) {
+      return reply.status(401).send({ error: "User not found" });
+    }
+
+    // Verify current password
+    const valid = await verify(user.passwordHash, currentPassword);
+    if (!valid) {
+      return reply.status(403).send({ error: "Current password is incorrect" });
+    }
+
+    // Hash and save new password
+    const newHash = await hash(newPassword);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    return reply.send({ ok: true });
   });
 
   // -----------------------------------------------------------------------
