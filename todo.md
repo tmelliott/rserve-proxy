@@ -180,13 +180,13 @@ API directly.
 - [x] Status auto-refresh (polling or SSE)
 - [x] Quick actions: start/stop/restart buttons per app
 
-### 4c. App Management
+### 4c. App Management ✓
 
-- [ ] "New App" form — name, slug, R version, packages (tag input), code source (git URL or upload), entry script
-- [ ] App detail page — config summary, status, container list, action buttons
-- [ ] Edit app page — update config fields
-- [ ] Log viewer — scrollable, auto-follow build/runtime logs
-- [ ] Delete confirmation dialog
+- [x] "New App" form — name, slug, R version, packages (tag input), code source (git URL or upload), entry script
+- [x] App detail page — config summary, status, container list, action buttons
+- [x] Edit app page — update config fields
+- [x] Log viewer — scrollable, auto-follow build/runtime logs
+- [x] Delete confirmation dialog
 
 ### 4d. Settings & Tokens
 
@@ -247,5 +247,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 4 — Web UI (sub-phase 4c — App Management)
+**Current phase:** 4 — Web UI (sub-phase 4d — Tokens)
 **Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4a — Foundation ✓
