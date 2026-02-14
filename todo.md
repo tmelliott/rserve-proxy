@@ -85,9 +85,9 @@ container that Traefik auto-discovers.
   - Tag as `rserve-app-{slug}:{hash}`
   - Apply `managed-by=rserve-proxy` label to image
 
-### 2c. Container Lifecycle
+### 2c. Container Lifecycle ✓
 
-- [ ] Implement `DockerSpawner.startApp()`:
+- [x] Implement `DockerSpawner.startApp()`:
   - Build image (if not provided)
   - Create container with Traefik labels:
     - `traefik.enable=true`
@@ -96,13 +96,13 @@ container that Traefik auto-discovers.
   - Connect to compose network
   - Start container
   - Apply `managed-by` + `app-id` labels
-- [ ] Implement `DockerSpawner.stopApp()` — stop + remove containers for app
-- [ ] Implement `DockerSpawner.restartApp()` — stop then start
-- [ ] Implement `DockerSpawner.getAppStatus()` — query Docker for container state
-- [ ] Implement `DockerSpawner.getContainers()` — return container info list
-- [ ] Implement `DockerSpawner.cleanup()` — remove stopped containers + dangling images for app
-- [ ] Implement `DockerSpawner.streamBuildLogs()` — stream build output via callback
-- [ ] Tests: spawner unit tests with mocked dockerode
+- [x] Implement `DockerSpawner.stopApp()` — stop + remove containers for app
+- [x] Implement `DockerSpawner.restartApp()` — stop then start
+- [x] Implement `DockerSpawner.getAppStatus()` — query Docker for container state
+- [x] Implement `DockerSpawner.getContainers()` — return container info list
+- [x] Implement `DockerSpawner.cleanup()` — remove stopped containers + dangling images for app
+- [x] Implement `DockerSpawner.streamBuildLogs()` — stream build output via callback
+- [x] Tests: spawner unit tests with mocked dockerode (21 tests, 46 total)
 
 ### 2d. Health Checking
 
