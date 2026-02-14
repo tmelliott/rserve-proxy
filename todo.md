@@ -174,11 +174,11 @@ API directly.
 - [x] Auth context provider — check `/api/auth/me` on load, redirect to login if unauthenticated
 - [x] Login page — form, error handling, redirect to dashboard on success
 
-### 4b. Dashboard
+### 4b. Dashboard ✓
 
-- [ ] App list page — table/card view of all apps with status badges (running/stopped/error)
-- [ ] Status auto-refresh (polling or SSE)
-- [ ] Quick actions: start/stop/restart buttons per app
+- [x] App list page — table/card view of all apps with status badges (running/stopped/error)
+- [x] Status auto-refresh (polling or SSE)
+- [x] Quick actions: start/stop/restart buttons per app
 
 ### 4c. App Management
 
@@ -247,5 +247,5 @@ API directly.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 4 — Web UI (sub-phase 4b — Dashboard)
+**Current phase:** 4 — Web UI (sub-phase 4c — App Management)
 **Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4a — Foundation ✓
