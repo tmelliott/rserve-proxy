@@ -69,15 +69,15 @@ token, use it in `Authorization: Bearer` header.
 **Goal:** The spawner can build a custom Rserve Docker image and start/stop a
 container that Traefik auto-discovers.
 
-### 2a. Base Image
+### 2a. Base Image ✓
 
-- [ ] Script to build `rserve-base:X.Y.Z` from `images/rserve-base/Dockerfile`
-- [ ] Add `docker:build-base` npm script (accepts R version arg)
-- [ ] Verify a plain `rserve-base` container starts and Rserve listens on 6311
+- [x] Script to build `rserve-base:X.Y.Z` from `images/rserve-base/Dockerfile`
+- [x] Add `docker:build-base` npm script (accepts R version arg)
+- [x] Verify a plain `rserve-base` container starts and Rserve listens on 6311
 
-### 2b. Dynamic Image Build
+### 2b. Dynamic Image Build ✓
 
-- [ ] Implement `DockerSpawner.buildImage()`:
+- [x] Implement `DockerSpawner.buildImage()`:
   - Generate a temp Dockerfile: `FROM rserve-base:{version}` → `pak::pak(packages)` → `COPY code /app`
   - For git source: clone repo into build context
   - For upload source: copy uploaded files into build context
