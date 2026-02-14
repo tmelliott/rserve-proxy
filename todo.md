@@ -202,6 +202,7 @@ API directly.
 
 **Goal:** The system is robust enough for a single-user/small-team deployment.
 
+- [ ] Rserve connectivity — decide routing strategy (WebSocket mode + Traefik WS proxy, TCP routing, or HTTP API bridge) and implement client access to running Rserve instances
 - [ ] Request validation on all API routes (return 400 with clear messages)
 - [ ] Proper error handling — spawner errors surface as 500s with context
 - [ ] Graceful shutdown — stop health check loop, drain HTTP connections

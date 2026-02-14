@@ -254,12 +254,13 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(403).send({ error: "Access denied" });
       }
 
-      // Stop containers + clean up Docker resources
+      // Stop containers + remove ALL Docker resources (containers + images)
       try {
         await app.spawner.stopApp(id);
         await app.spawner.cleanup(id);
+        await app.spawner.removeImages(id);
       } catch {
-        // Best effort — containers may not exist
+        // Best effort — containers/images may not exist
       }
 
       // Remove uploaded code

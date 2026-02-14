@@ -445,6 +445,24 @@ export class DockerSpawner implements ISpawner {
       });
     }
   }
+
+  /** Remove ALL images (tagged + dangling) for an app. Use on app deletion. */
+  async removeImages(appId: string): Promise<number> {
+    const images = await this.docker.listImages({
+      filters: {
+        label: [
+          `${MANAGED_LABEL}=${MANAGED_VALUE}`,
+          `${APP_ID_LABEL}=${appId}`,
+        ],
+      },
+    });
+    let removed = 0;
+    for (const img of images) {
+      await this.docker.getImage(img.Id).remove({ force: true }).catch(() => {});
+      removed++;
+    }
+    return removed;
+  }
 }
 
 // ---------------------------------------------------------------------------
