@@ -229,6 +229,88 @@ API directly.
 
 ---
 
+## Phase 7 — Observability Dashboard
+
+**Goal:** A real-time monitoring dashboard with uptime history, resource usage,
+and request metrics — both system-wide and per-app.
+
+### 7a. Metrics Collection Backend
+
+> Collect and store time-series data from Docker and Traefik.
+
+- [ ] **Status history store** — ring-buffer or Postgres table recording per-app
+      status every 60s (appId, status, timestamp). Retain last 24h in memory,
+      optionally persist to DB for longer history.
+- [ ] **Container stats collector** — new `MetricsCollector` service that polls
+      `dockerode.container.stats()` every 60s for each running container. Extract:
+  - CPU usage % (from `cpu_stats` delta calculation)
+  - Memory usage (RSS) and limit
+  - Network RX/TX bytes (delta per interval)
+- [ ] **Cluster-level aggregation** — sum per-app metrics into system totals:
+      total CPU %, total memory used / available, total network I/O
+- [ ] **Request counting** — scrape Traefik's built-in Prometheus metrics
+      endpoint (`/metrics` on the Traefik entrypoint) for per-service
+      `traefik_service_requests_total`, compute requests/min per app
+- [ ] **New API endpoints:**
+  - `GET /api/metrics/system` — cluster-wide resource usage over time
+      (CPU %, memory %, network I/O, total requests/min)
+  - `GET /api/metrics/apps/:id` — per-app resource usage over time
+      (CPU %, memory MB, network RX/TX, requests/min)
+  - `GET /api/status/history` — all apps' status timeline (last N hours)
+  - `GET /api/apps/:id/status/history` — single app's status timeline
+  - Query params: `?period=1h|6h|24h|7d` to control time range
+- [ ] **Tests** — metrics collector unit tests with mocked Docker stats
+
+### 7b. System Status Dashboard (UI)
+
+> Overview page showing at-a-glance health of the entire platform.
+
+- [ ] **Uptime grid** — each app as a row, columns = 1-minute buckets,
+      cells colored green (running), red (error/down), yellow (starting/stopping),
+      gray (stopped). Show last 60 minutes by default, expandable to 24h.
+- [ ] **Cluster resource summary cards** — top of dashboard:
+  - Total CPU usage (% of host)
+  - Total memory usage (used / available)
+  - Total network throughput (in/out)
+  - Total active containers
+  - Total requests/min across all apps
+- [ ] **Cluster resource charts** — time-series line charts (last 1h/6h/24h):
+  - CPU % over time
+  - Memory % over time
+  - Network I/O over time
+- [ ] **Auto-refresh** — poll metrics endpoints every 60s, status every 15s
+
+### 7c. Per-App Monitoring (UI)
+
+> Extend the existing app detail page with resource and uptime data.
+
+- [ ] **Uptime timeline** — horizontal bar on app detail page showing
+      minute-by-minute status for last 60 min (same color scheme as grid).
+      Hover for timestamp + status. Expandable to 24h.
+- [ ] **Resource charts** — per-app time-series charts on detail page:
+  - CPU usage % over time
+  - Memory usage (MB) over time with limit line
+  - Network RX/TX bytes/sec over time
+  - Requests/min over time
+- [ ] **Current stats summary** — live-updating cards showing current
+      CPU %, memory MB / limit, network rates, uptime duration
+- [ ] **Chart library** — add a lightweight charting dependency
+      (e.g., `recharts`, `uplot`, or `chart.js`) to the UI package
+
+### 7d. Traefik Metrics Integration
+
+> Wire up Traefik to expose per-service metrics the API can scrape.
+
+- [ ] Enable Traefik Prometheus metrics provider in compose config
+      (`--metrics.prometheus=true`, expose on internal port)
+- [ ] API scrapes Traefik `/metrics` endpoint on each collection cycle
+- [ ] Parse `traefik_service_requests_total` counter by service name,
+      compute per-app request rate (requests/min delta)
+- [ ] Optionally expose response time percentiles (p50, p95, p99) from
+      `traefik_service_request_duration_seconds`
+
+---
+
 ## Stretch Goals (Future)
 
 - [x] Auto-inject `run.Rserve()` — user scripts just define `oc.init`, platform handles WebSocket startup (port 8081, no QAP)
