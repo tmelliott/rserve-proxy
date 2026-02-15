@@ -15,10 +15,4 @@ oc.init <- function() {
     })
 }
 
-# WebSocket on 8081 (where Traefik routes), QAP on 6311 (for health checks).
-Rserve::run.Rserve(
-    websockets.port = 8081,
-    websockets = TRUE,
-    oob = TRUE,
-    websockets.qap.oc = TRUE
-)
+# run.Rserve() is called automatically by the platform — no need to call it here.

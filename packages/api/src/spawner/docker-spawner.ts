@@ -38,10 +38,7 @@ const MANAGED_LABEL = "managed-by";
 const MANAGED_VALUE = "rserve-proxy";
 const APP_ID_LABEL = "rserve-proxy.app-id";
 
-/** Default Rserve QAP (binary) port inside the container */
-const RSERVE_PORT = 6311;
-
-/** Rserve HTTP / WebSocket port inside the container */
+/** Rserve WebSocket port inside the container */
 const RSERVE_WS_PORT = 8081;
 
 // ---------------------------------------------------------------------------
@@ -93,19 +90,18 @@ function generateDockerfile(cfg: AppConfig): string {
   lines.push(
     "COPY code/ /app/",
     "",
-    // Rserve configuration: enable WebSocket/HTTP transport on port 8081.
-    // The QAP binary port (6311) remains for health checks and native clients.
-    // When user code calls run.Rserve(), it reads /etc/Rserv.conf automatically.
-    `RUN printf 'remote enable\\nhttp.port ${RSERVE_WS_PORT}\\n' > /etc/Rserv.conf`,
+    // Rserve configuration: remote enable is needed for non-local connections.
+    `RUN printf 'remote enable\\n' > /etc/Rserv.conf`,
     "",
-    `EXPOSE ${RSERVE_PORT} ${RSERVE_WS_PORT}`,
+    `EXPOSE ${RSERVE_WS_PORT}`,
     "",
-    // Health check: attempt a TCP connection to the Rserve QAP port.
-    // bash's /dev/tcp is the simplest zero-dependency check.
+    // Health check: TCP probe on the WebSocket port.
     `HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \\`,
-    `  CMD bash -c "echo > /dev/tcp/localhost/${RSERVE_PORT}" || exit 1`,
+    `  CMD bash -c "echo > /dev/tcp/localhost/${RSERVE_WS_PORT}" || exit 1`,
     "",
-    `CMD ["R", "-e", "source('/app/${cfg.entryScript}')"]`,
+    // Source the user's entry script (defines oc.init etc.), then start Rserve.
+    // The platform controls the run.Rserve() call so users don't need to.
+    `CMD ["R", "-e", "source('/app/${cfg.entryScript}'); Rserve::run.Rserve(websockets.port=${RSERVE_WS_PORT}L, websockets=TRUE, oob=TRUE, websockets.qap.oc=TRUE, qap=FALSE)"]`,
     "",
   );
 
@@ -333,7 +329,6 @@ export class DockerSpawner implements ISpawner {
         name: containerName,
         Labels: labels,
         ExposedPorts: {
-          [`${RSERVE_PORT}/tcp`]: {},
           [`${RSERVE_WS_PORT}/tcp`]: {},
         },
         HostConfig: {

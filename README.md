@@ -96,13 +96,9 @@ rserve-proxy/
 
 ## Writing R Apps
 
-R apps must call `Rserve::run.Rserve()` to start the server. Inside Docker,
-`/etc/Rserv.conf` provides `remote enable` and `http.port 8081`. The app script
-should set `websockets.port = 8081` (matching the Traefik route) and leave QAP
-enabled on 6311 (used by the Docker health check).
-
-OCAP mode is the recommended pattern — define an `oc.init` function that returns
-wrapped R functions:
+The platform automatically calls `Rserve::run.Rserve()` with the correct
+WebSocket configuration after sourcing your entry script. Your R code just
+needs to define an `oc.init` function that returns OCAP-wrapped R functions:
 
 ```r
 library(Rserve)
@@ -116,14 +112,10 @@ oc.init <- function() {
         )
     })
 }
-
-Rserve::run.Rserve(
-    websockets.port = 8081,
-    websockets = TRUE,
-    oob = TRUE,
-    websockets.qap.oc = TRUE
-)
 ```
+
+Do **not** call `run.Rserve()` in your script — the platform handles port
+binding, WebSocket setup, and health checks.
 
 See `tests/testapp.R` for a working example and `tests/test.js` for a Node
 client that connects via `rserve-ts`.

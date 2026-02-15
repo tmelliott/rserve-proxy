@@ -38,6 +38,7 @@ RUN bun install --frozen-lockfile --production --ignore-scripts
 
 # --- Production runtime ---
 FROM node:22-alpine
+RUN apk add --no-cache git
 WORKDIR /app
 
 # Copy production node_modules (Bun hoists everything to root)
