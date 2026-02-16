@@ -12,13 +12,22 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import type { AppWithStatus } from "@rserve-proxy/shared";
+import type {
+  AppWithStatus,
+  AppMetricsSnapshot,
+  MetricsPeriod,
+  StatusHistoryEntry,
+} from "@rserve-proxy/shared";
 import { api, ApiError } from "../../lib/api.js";
-import { POLL_INTERVAL_MS } from "../../lib/constants.js";
+import { POLL_INTERVAL_MS, METRICS_POLL_MS } from "../../lib/constants.js";
 import { StatusBadge } from "../../components/ui/StatusBadge.js";
 import { Button } from "../../components/ui/Button.js";
 import { Spinner } from "../../components/ui/Spinner.js";
 import { Modal } from "../../components/ui/Modal.js";
+import { PeriodSelector } from "../../components/dashboard/PeriodSelector.js";
+import { AppResourceCards } from "../../components/dashboard/AppResourceCards.js";
+import { UptimeTimeline } from "../../components/dashboard/UptimeTimeline.js";
+import { ResourceCharts } from "../../components/dashboard/ResourceCharts.js";
 
 export function AppDetail() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +42,11 @@ export function AppDetail() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Monitoring state
+  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>("1h");
+  const [appMetrics, setAppMetrics] = useState<AppMetricsSnapshot[]>([]);
+  const [statusEntries, setStatusEntries] = useState<StatusHistoryEntry[]>([]);
 
   const fetchApp = useCallback(async () => {
     if (!id) return;
@@ -58,6 +72,27 @@ export function AppDetail() {
     const timeout = setTimeout(() => setBanner(null), 3000);
     return () => clearTimeout(timeout);
   }, [banner]);
+
+  // Fetch metrics and status history
+  const fetchMetrics = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [metricsRes, statusRes] = await Promise.all([
+        api.metrics.app(id, metricsPeriod),
+        api.metrics.appStatusHistory(id, metricsPeriod),
+      ]);
+      setAppMetrics(metricsRes.dataPoints);
+      setStatusEntries(statusRes.entries);
+    } catch {
+      // Silently fail — metrics are supplemental
+    }
+  }, [id, metricsPeriod]);
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, METRICS_POLL_MS);
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
 
   const handleAction = async (action: "start" | "stop" | "restart" | "rebuild") => {
     if (!id) return;
@@ -295,6 +330,19 @@ export function AppDetail() {
           </table>
         </div>
       )}
+
+      {/* Monitoring */}
+      <div className="mt-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-gray-700">Monitoring</h2>
+          <PeriodSelector value={metricsPeriod} onChange={setMetricsPeriod} />
+        </div>
+        <AppResourceCards
+          latest={appMetrics.length > 0 ? appMetrics[appMetrics.length - 1] : null}
+        />
+        <UptimeTimeline entries={statusEntries} period={metricsPeriod} />
+        <ResourceCharts dataPoints={appMetrics} period={metricsPeriod} />
+      </div>
 
       {/* Error info */}
       {app.error && (

@@ -9,10 +9,19 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { SystemMetricsSnapshot, MetricsPeriod } from "@rserve-proxy/shared";
+import type { MetricsPeriod } from "@rserve-proxy/shared";
+
+interface ResourceDataPoint {
+  cpuPercent: number;
+  memoryMB: number;
+  memoryLimitMB: number;
+  networkRxBytes: number;
+  networkTxBytes: number;
+  collectedAt: string;
+}
 
 interface ResourceChartsProps {
-  dataPoints: SystemMetricsSnapshot[];
+  dataPoints: ResourceDataPoint[];
   period: MetricsPeriod;
 }
 

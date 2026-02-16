@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type {
   MetricsPeriod,
   SystemMetricsSnapshot,
   AppStatusHistory,
+  AppWithStatus,
 } from "@rserve-proxy/shared";
 import { api } from "../../lib/api.js";
 import { METRICS_POLL_MS, STATUS_POLL_MS } from "../../lib/constants.js";
@@ -18,6 +19,7 @@ export function Dashboard() {
     [],
   );
   const [statusApps, setStatusApps] = useState<AppStatusHistory[]>([]);
+  const [allApps, setAllApps] = useState<AppWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,8 +35,12 @@ export function Dashboard() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await api.metrics.statusHistory(period);
-      setStatusApps(res.apps);
+      const [statusRes, appsRes] = await Promise.all([
+        api.metrics.statusHistory(period),
+        api.apps.list(),
+      ]);
+      setStatusApps(statusRes.apps);
+      setAllApps(appsRes.apps);
       setError(null);
     } catch (err) {
       setError(
@@ -42,6 +48,19 @@ export function Dashboard() {
       );
     }
   }, [period]);
+
+  // Merge: ensure all apps appear in the grid, even without history
+  const mergedApps = useMemo(() => {
+    const seen = new Set(statusApps.map((a) => a.appId));
+    const extras: AppStatusHistory[] = allApps
+      .filter((a) => !seen.has(a.id))
+      .map((a) => ({
+        appId: a.id,
+        appName: a.name,
+        entries: [{ status: a.status, timestamp: new Date().toISOString() }],
+      }));
+    return [...statusApps, ...extras];
+  }, [statusApps, allApps]);
 
   // Initial load
   useEffect(() => {
@@ -92,7 +111,7 @@ export function Dashboard() {
           <ResourceCards latest={latest} />
 
           {/* Uptime grid */}
-          <UptimeGrid apps={statusApps} period={period} />
+          <UptimeGrid apps={mergedApps} period={period} />
 
           {/* Resource charts */}
           <ResourceCharts dataPoints={systemMetrics} period={period} />
