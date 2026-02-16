@@ -19,6 +19,7 @@ import type {
   MetricsPeriod,
   AppStatusHistory,
 } from "@rserve-proxy/shared";
+import { scrapeTraefikMetrics } from "./traefik-scraper.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -50,6 +51,8 @@ interface PreviousStats {
 export interface MetricsCollectorOptions {
   /** Collection interval in ms (default: 60000 = 1 min) */
   intervalMs?: number;
+  /** Traefik Prometheus metrics URL (e.g. http://traefik:8082/metrics) */
+  traefikUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +63,7 @@ export class MetricsCollector {
   private spawner: DockerSpawner;
   private healthMonitor: HealthMonitor;
   private intervalMs: number;
+  private traefikUrl: string | null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   /** Per-app resource snapshots (ring buffer) */
@@ -77,6 +81,12 @@ export class MetricsCollector {
   /** App name cache (appId → name) to avoid DB lookups */
   private appNames = new Map<string, string>();
 
+  /** Slug → appId mapping for Traefik service name resolution */
+  private slugToAppId = new Map<string, string>();
+
+  /** Previous Traefik request counters for delta computation (slug → count) */
+  private prevRequestCounts = new Map<string, number>();
+
   constructor(
     spawner: DockerSpawner,
     healthMonitor: HealthMonitor,
@@ -85,6 +95,7 @@ export class MetricsCollector {
     this.spawner = spawner;
     this.healthMonitor = healthMonitor;
     this.intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.traefikUrl = options?.traefikUrl ?? null;
   }
 
   /** Start the collection loop */
@@ -111,6 +122,11 @@ export class MetricsCollector {
   /** Register an app name for status history labels */
   setAppName(appId: string, name: string): void {
     this.appNames.set(appId, name);
+  }
+
+  /** Register a slug → appId mapping for Traefik service name resolution */
+  setAppSlug(appId: string, slug: string): void {
+    this.slugToAppId.set(slug, appId);
   }
 
   // -----------------------------------------------------------------------
@@ -219,7 +235,44 @@ export class MetricsCollector {
       // Docker unavailable — record zeros
     }
 
-    // 3. Store per-app metrics
+    // 3. Scrape Traefik metrics for request rates
+    const appRequestRates = new Map<string, number>();
+    let totalRequestsPerMin: number | null = null;
+
+    if (this.traefikUrl) {
+      const counts = await scrapeTraefikMetrics(this.traefikUrl);
+      if (counts.size > 0) {
+        let totalRate = 0;
+        const minutesFactor = this.intervalMs / 60_000;
+
+        for (const [slug, currentCount] of counts) {
+          const prev = this.prevRequestCounts.get(slug);
+          if (prev !== undefined) {
+            const delta = Math.max(0, currentCount - prev);
+            const rate = round2(delta / minutesFactor);
+            // Map slug → appId
+            const appId = this.slugToAppId.get(slug);
+            if (appId) {
+              appRequestRates.set(
+                appId,
+                (appRequestRates.get(appId) ?? 0) + rate,
+              );
+              totalRate += rate;
+            }
+          }
+        }
+
+        // Save current counters for next delta
+        this.prevRequestCounts = counts;
+
+        // Only report system total if we had previous data to delta against
+        if (this.prevRequestCounts.size > 0) {
+          totalRequestsPerMin = round2(totalRate);
+        }
+      }
+    }
+
+    // 4. Store per-app metrics
     for (const [appId, acc] of appAccum) {
       const snapshot: AppMetricsSnapshot = {
         appId,
@@ -228,21 +281,21 @@ export class MetricsCollector {
         memoryLimitMB: round2(acc.memLimit),
         networkRxBytes: acc.rx,
         networkTxBytes: acc.tx,
-        requestsPerMin: null, // Phase 7d
+        requestsPerMin: appRequestRates.get(appId) ?? null,
         containers: acc.containers,
         collectedAt: now,
       };
       pushRingBuffer(this.appMetrics, appId, snapshot, MAX_ENTRIES);
     }
 
-    // 4. Store system metrics
+    // 5. Store system metrics
     const systemSnapshot: SystemMetricsSnapshot = {
       cpuPercent: round2(totalCpu),
       memoryMB: round2(totalMemory),
       memoryLimitMB: round2(totalMemoryLimit),
       networkRxBytes: totalRx,
       networkTxBytes: totalTx,
-      requestsPerMin: null, // Phase 7d
+      requestsPerMin: totalRequestsPerMin,
       activeContainers: totalContainers,
       activeApps: activeAppIds.size,
       collectedAt: now,

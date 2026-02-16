@@ -319,4 +319,97 @@ describe("MetricsCollector", () => {
     // Memory should be summed: 128 MB * 2 = 256 MB
     expect(appMetrics[0].memoryMB).toBeCloseTo(256, 0);
   });
+
+  it("computes requestsPerMin from Traefik metrics", async () => {
+    let fetchCallCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCallCount++;
+      // First call: baseline counter. Second call: increased counter.
+      const count = fetchCallCount === 1 ? 100 : 160;
+      const body =
+        `traefik_service_requests_total{code="200",method="GET",protocol="http",service="test-slug@docker"} ${count}`;
+      return new Response(body, { status: 200 });
+    });
+
+    const mockContainer = {
+      stats: vi.fn().mockResolvedValue(createMockStats()),
+    };
+    const spawner = createMockSpawner({
+      listManagedContainers: vi.fn().mockResolvedValue([
+        { Id: "c1", State: "running", Labels: { "rserve-proxy.app-id": "app-1" } },
+      ]),
+      getDocker: vi.fn().mockReturnValue({
+        getContainer: vi.fn().mockReturnValue(mockContainer),
+      }),
+    });
+    const monitor = createMockHealthMonitor();
+
+    collector = new MetricsCollector(spawner, monitor, {
+      intervalMs: 50,
+      traefikUrl: "http://traefik:8082/metrics",
+    });
+    collector.setAppSlug("app-1", "test-slug");
+    collector.start();
+
+    // Wait for at least 2 collections so we get a delta
+    await vi.waitFor(
+      () => {
+        const metrics = collector.getAppMetrics("app-1", "1h");
+        expect(metrics.length).toBeGreaterThanOrEqual(2);
+        // Second data point should have a computed request rate
+        const withRate = metrics.find((m) => m.requestsPerMin !== null);
+        expect(withRate).toBeDefined();
+      },
+      { timeout: 1000 },
+    );
+
+    const appMetrics = collector.getAppMetrics("app-1", "1h");
+    const withRate = appMetrics.find((m) => m.requestsPerMin !== null);
+    expect(withRate!.requestsPerMin).toBeGreaterThan(0);
+
+    // System metrics should also have requestsPerMin
+    const sysMetrics = collector.getSystemMetrics("1h");
+    const sysWithRate = sysMetrics.find((m) => m.requestsPerMin !== null);
+    expect(sysWithRate).toBeDefined();
+
+    vi.restoreAllMocks();
+  });
+
+  it("leaves requestsPerMin null when no traefik URL configured", async () => {
+    const spawner = createMockSpawner();
+    const monitor = createMockHealthMonitor();
+
+    collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
+    collector.start();
+
+    await vi.waitFor(() => {
+      expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const sysMetrics = collector.getSystemMetrics("1h");
+    expect(sysMetrics[0].requestsPerMin).toBeNull();
+  });
+
+  it("handles Traefik scrape failure gracefully", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const spawner = createMockSpawner();
+    const monitor = createMockHealthMonitor();
+
+    collector = new MetricsCollector(spawner, monitor, {
+      intervalMs: 50,
+      traefikUrl: "http://traefik:8082/metrics",
+    });
+    collector.start();
+
+    await vi.waitFor(() => {
+      expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Should still record metrics with null requestsPerMin
+    const sysMetrics = collector.getSystemMetrics("1h");
+    expect(sysMetrics[0].requestsPerMin).toBeNull();
+
+    vi.restoreAllMocks();
+  });
 });

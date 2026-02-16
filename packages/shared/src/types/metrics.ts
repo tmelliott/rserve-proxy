@@ -23,7 +23,7 @@ export interface ResourceSnapshot {
   networkRxBytes: number;
   /** Network bytes sent since last collection */
   networkTxBytes: number;
-  /** Requests per minute (null until Traefik metrics wired in Phase 7d) */
+  /** Requests per minute (null when Traefik metrics unavailable) */
   requestsPerMin: number | null;
   /** ISO 8601 timestamp */
   collectedAt: string;

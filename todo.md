@@ -293,17 +293,18 @@ and request metrics — both system-wide and per-app.
       CPU %, memory MB / limit, network rates, uptime duration
 - [x] **Chart library** — recharts@3.7.0 added to UI package
 
-### 7d. Traefik Metrics Integration
+### 7d. Traefik Metrics Integration ✓
 
 > Wire up Traefik to expose per-service metrics the API can scrape.
 
-- [ ] Enable Traefik Prometheus metrics provider in compose config
-      (`--metrics.prometheus=true`, expose on internal port)
-- [ ] API scrapes Traefik `/metrics` endpoint on each collection cycle
-- [ ] Parse `traefik_service_requests_total` counter by service name,
+- [x] Enable Traefik Prometheus metrics provider in compose config
+      (`--metrics.prometheus=true`, expose on internal port 8082)
+- [x] API scrapes Traefik `/metrics` endpoint on each collection cycle
+- [x] Parse `traefik_service_requests_total` counter by service name,
       compute per-app request rate (requests/min delta)
-- [ ] Optionally expose response time percentiles (p50, p95, p99) from
-      `traefik_service_request_duration_seconds`
+- [x] UI shows requests/min in resource cards and time-series charts
+      (conditionally — only when Traefik data is available)
+- [x] Tests — 8 scraper + 3 collector integration tests (122 total)
 
 ---
 
@@ -343,5 +344,5 @@ and request metrics — both system-wide and per-app.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 7d — Traefik Metrics Integration
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 ✓, Phase 7a ✓, Phase 7b ✓, Phase 7c ✓
+**Current phase:** 6 — Production Hardening (remaining items)
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 ✓, Phase 7 ✓

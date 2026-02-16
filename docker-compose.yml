@@ -6,6 +6,9 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entrypoint=metrics"
+      - "--entrypoints.metrics.address=:8082"
       # Uncomment for HTTPS with Let's Encrypt:
       # - "--entrypoints.websecure.address=:443"
       # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"

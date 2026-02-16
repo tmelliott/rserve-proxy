@@ -15,6 +15,8 @@ import { appRoutes } from "./routes/apps.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { metricsRoutes, statusRoutes, appStatusHistoryRoutes } from "./routes/metrics.js";
+import { db } from "./db/index.js";
+import { apps } from "./db/schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,7 +67,10 @@ export async function buildApp(opts?: BuildAppOptions) {
   // Spawner + Health Monitor + Metrics Collector (decorated so routes can access them)
   const spawner = customSpawner ?? new DockerSpawner();
   const healthMonitor = customMonitor ?? new HealthMonitor(spawner);
-  const metricsCollector = customMetrics ?? new MetricsCollector(spawner, healthMonitor);
+  const traefikUrl = process.env.TRAEFIK_METRICS_URL || "http://traefik:8082/metrics";
+  const metricsCollector = customMetrics ?? new MetricsCollector(spawner, healthMonitor, {
+    traefikUrl: process.env.NODE_ENV === "test" ? undefined : traefikUrl,
+  });
   app.decorate("spawner", spawner);
   app.decorate("healthMonitor", healthMonitor);
   app.decorate("metricsCollector", metricsCollector);
@@ -180,6 +185,19 @@ export async function buildApp(opts?: BuildAppOptions) {
 
   // Start health monitoring and metrics collection when the server is ready
   app.addHook("onReady", async () => {
+    // Populate slug → appId mapping for Traefik metrics resolution
+    try {
+      const rows = await db
+        .select({ id: apps.id, slug: apps.slug, name: apps.name })
+        .from(apps);
+      for (const row of rows) {
+        metricsCollector.setAppSlug(row.id, row.slug);
+        metricsCollector.setAppName(row.id, row.name);
+      }
+    } catch {
+      // DB may not be available (e.g. tests without real DB)
+    }
+
     healthMonitor.start();
     metricsCollector.start();
   });

@@ -1,4 +1,4 @@
-import { Cpu, MemoryStick, Network, Container } from "lucide-react";
+import { Cpu, MemoryStick, Network, Container, Activity } from "lucide-react";
 import type { SystemMetricsSnapshot } from "@rserve-proxy/shared";
 
 interface ResourceCardsProps {
@@ -34,6 +34,8 @@ function Card({ icon, label, value, sub }: CardProps) {
 }
 
 export function ResourceCards({ latest }: ResourceCardsProps) {
+  const showRequests = latest?.requestsPerMin != null;
+
   if (!latest) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -51,7 +53,7 @@ export function ResourceCards({ latest }: ResourceCardsProps) {
       : "0";
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-4 ${showRequests ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
       <Card
         icon={<Cpu className="h-4 w-4" />}
         label="CPU"
@@ -75,6 +77,13 @@ export function ResourceCards({ latest }: ResourceCardsProps) {
         value={String(latest.activeContainers)}
         sub={`${latest.activeApps} app${latest.activeApps !== 1 ? "s" : ""}`}
       />
+      {showRequests && (
+        <Card
+          icon={<Activity className="h-4 w-4" />}
+          label="Requests"
+          value={`${latest.requestsPerMin!.toFixed(1)}/min`}
+        />
+      )}
     </div>
   );
 }

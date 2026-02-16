@@ -108,6 +108,10 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
         })
         .returning();
 
+      // Register slug mapping for Traefik metrics resolution
+      app.metricsCollector.setAppSlug(row.id, row.slug);
+      app.metricsCollector.setAppName(row.id, row.name);
+
       return reply.status(201).send({ app: rowToAppConfig(row) });
     },
   );

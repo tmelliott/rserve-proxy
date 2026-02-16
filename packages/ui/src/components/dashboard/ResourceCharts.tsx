@@ -17,6 +17,7 @@ interface ResourceDataPoint {
   memoryLimitMB: number;
   networkRxBytes: number;
   networkTxBytes: number;
+  requestsPerMin?: number | null;
   collectedAt: string;
 }
 
@@ -53,6 +54,7 @@ const CHART_COLORS = {
   memLimit: "#d1d5db",  // gray-300
   networkRx: "#3b82f6", // blue-500
   networkTx: "#22c55e", // green-500
+  requests: "#f59e0b",  // amber-500
 };
 
 export function ResourceCharts({ dataPoints, period }: ResourceChartsProps) {
@@ -65,12 +67,18 @@ export function ResourceCharts({ dataPoints, period }: ResourceChartsProps) {
         memoryLimitMB: dp.memoryLimitMB,
         networkRx: dp.networkRxBytes,
         networkTx: dp.networkTxBytes,
+        requestsPerMin: dp.requestsPerMin ?? 0,
       })),
     [dataPoints, period],
   );
 
   const maxMemLimit = useMemo(
     () => Math.max(...dataPoints.map((dp) => dp.memoryLimitMB), 1),
+    [dataPoints],
+  );
+
+  const hasRequestData = useMemo(
+    () => dataPoints.some((dp) => dp.requestsPerMin != null),
     [dataPoints],
   );
 
@@ -83,7 +91,7 @@ export function ResourceCharts({ dataPoints, period }: ResourceChartsProps) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className={`grid gap-4 ${hasRequestData ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
       {/* CPU Chart */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
         <h4 className="mb-3 text-sm font-medium text-gray-700">CPU Usage</h4>
@@ -198,6 +206,44 @@ export function ResourceCharts({ dataPoints, period }: ResourceChartsProps) {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Requests Chart */}
+      {hasRequestData && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h4 className="mb-3 text-sm font-medium text-gray-700">
+            Requests/min
+          </h4>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 10 }}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v) => `${v}`}
+                width={40}
+              />
+              <Tooltip
+                formatter={(value) => [
+                  `${Number(value).toFixed(1)}/min`,
+                  "Requests",
+                ]}
+              />
+              <Area
+                type="monotone"
+                dataKey="requestsPerMin"
+                stroke={CHART_COLORS.requests}
+                fill={CHART_COLORS.requests}
+                fillOpacity={0.15}
+                strokeWidth={1.5}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
