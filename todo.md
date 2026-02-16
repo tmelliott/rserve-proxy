@@ -258,41 +258,40 @@ and request metrics — both system-wide and per-app.
   - Query params: `?period=1h|6h|24h|7d` to control time range
 - [x] **Tests** — 10 collector unit tests + 12 route tests (111 total)
 
-### 7b. System Status Dashboard (UI)
+### 7b. System Status Dashboard (UI) ✓
 
 > Overview page showing at-a-glance health of the entire platform.
 
-- [ ] **Uptime grid** — each app as a row, columns = 1-minute buckets,
+- [x] **Uptime grid** — each app as a row, columns = 1-minute buckets,
       cells colored green (running), red (error/down), yellow (starting/stopping),
       gray (stopped). Show last 60 minutes by default, expandable to 24h.
-- [ ] **Cluster resource summary cards** — top of dashboard:
+- [x] **Cluster resource summary cards** — top of dashboard:
   - Total CPU usage (% of host)
   - Total memory usage (used / available)
   - Total network throughput (in/out)
   - Total active containers
   - Total requests/min across all apps
-- [ ] **Cluster resource charts** — time-series line charts (last 1h/6h/24h):
+- [x] **Cluster resource charts** — time-series line charts (last 1h/6h/24h):
   - CPU % over time
   - Memory % over time
   - Network I/O over time
-- [ ] **Auto-refresh** — poll metrics endpoints every 60s, status every 15s
+- [x] **Auto-refresh** — poll metrics endpoints every 60s, status every 15s
 
-### 7c. Per-App Monitoring (UI)
+### 7c. Per-App Monitoring (UI) ✓
 
 > Extend the existing app detail page with resource and uptime data.
 
-- [ ] **Uptime timeline** — horizontal bar on app detail page showing
+- [x] **Uptime timeline** — horizontal bar on app detail page showing
       minute-by-minute status for last 60 min (same color scheme as grid).
       Hover for timestamp + status. Expandable to 24h.
-- [ ] **Resource charts** — per-app time-series charts on detail page:
+- [x] **Resource charts** — per-app time-series charts on detail page:
   - CPU usage % over time
   - Memory usage (MB) over time with limit line
   - Network RX/TX bytes/sec over time
   - Requests/min over time
-- [ ] **Current stats summary** — live-updating cards showing current
+- [x] **Current stats summary** — live-updating cards showing current
       CPU %, memory MB / limit, network rates, uptime duration
-- [ ] **Chart library** — add a lightweight charting dependency
-      (e.g., `recharts`, `uplot`, or `chart.js`) to the UI package
+- [x] **Chart library** — recharts@3.7.0 added to UI package
 
 ### 7d. Traefik Metrics Integration
 
@@ -344,5 +343,5 @@ and request metrics — both system-wide and per-app.
 
 > Update this section as you work through the phases.
 
-**Current phase:** 6 — Production Hardening
-**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 ✓
+**Current phase:** 7d — Traefik Metrics Integration
+**Completed:** Phase 0 ✓, Phase 1 ✓, Phase 2 ✓, Phase 3 ✓, Phase 4 ✓, Phase 5 ✓, Phase 7a ✓, Phase 7b ✓, Phase 7c ✓
