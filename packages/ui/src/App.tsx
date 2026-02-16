@@ -9,6 +9,7 @@ import { AppEdit } from "./pages/apps/AppEdit.js";
 import { AppLogs } from "./pages/apps/AppLogs.js";
 import { TokenList } from "./pages/tokens/TokenList.js";
 import { Profile } from "./pages/settings/Profile.js";
+import { Dashboard } from "./pages/dashboard/Dashboard.js";
 
 export function App() {
   return (
@@ -22,6 +23,7 @@ export function App() {
             <Route path="apps/:id" element={<AppDetail />} />
             <Route path="apps/:id/edit" element={<AppEdit />} />
             <Route path="apps/:id/logs" element={<AppLogs />} />
+            <Route path="dashboard" element={<Dashboard />} />
             <Route path="tokens" element={<TokenList />} />
             <Route path="profile" element={<Profile />} />
           </Route>

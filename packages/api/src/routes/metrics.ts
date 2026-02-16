@@ -66,6 +66,23 @@ export const statusRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const period = (request.query.period ?? "1h") as MetricsPeriod;
       const appsList = app.metricsCollector.getStatusHistory(period);
+
+      // Resolve app names from DB for any that are still showing as IDs
+      const appIds = appsList
+        .filter((a) => a.appName === a.appId)
+        .map((a) => a.appId);
+      if (appIds.length > 0) {
+        const rows = await db.select({ id: apps.id, name: apps.name }).from(apps);
+        const nameMap = new Map(rows.map((r) => [r.id, r.name]));
+        for (const entry of appsList) {
+          const dbName = nameMap.get(entry.appId);
+          if (dbName) {
+            entry.appName = dbName;
+            app.metricsCollector.setAppName(entry.appId, dbName);
+          }
+        }
+      }
+
       return reply.send({ period, apps: appsList });
     },
   );

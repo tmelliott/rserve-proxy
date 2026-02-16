@@ -4,6 +4,11 @@ import type {
   AppWithStatus,
   ApiToken,
   LoginRequest,
+  MetricsPeriod,
+  SystemMetricsResponse,
+  AppMetricsResponse,
+  StatusHistoryResponse,
+  AppStatusHistoryResponse,
 } from "@rserve-proxy/shared";
 
 export class ApiError extends Error {
@@ -109,5 +114,15 @@ export const api = {
         }>;
       });
     },
+  },
+  metrics: {
+    system: (period: MetricsPeriod = "1h") =>
+      request<SystemMetricsResponse>(`/api/metrics/system?period=${period}`),
+    app: (id: string, period: MetricsPeriod = "1h") =>
+      request<AppMetricsResponse>(`/api/metrics/apps/${id}?period=${period}`),
+    statusHistory: (period: MetricsPeriod = "1h") =>
+      request<StatusHistoryResponse>(`/api/status/history?period=${period}`),
+    appStatusHistory: (id: string, period: MetricsPeriod = "1h") =>
+      request<AppStatusHistoryResponse>(`/api/apps/${id}/status/history?period=${period}`),
   },
 };

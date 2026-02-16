@@ -1,8 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { Box, Key, UserCircle } from "lucide-react";
+import { Box, Key, LayoutDashboard, UserCircle } from "lucide-react";
 import clsx from "clsx";
 
 const links = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/", label: "Apps", icon: Box },
   { to: "/tokens", label: "API Tokens", icon: Key },
   { to: "/profile", label: "Profile", icon: UserCircle },
