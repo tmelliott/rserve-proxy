@@ -165,6 +165,11 @@ export class DockerSpawner implements ISpawner {
   private docker: Docker;
   private networkName: string;
 
+  /** Expose the dockerode instance for metrics collection */
+  getDocker(): Docker {
+    return this.docker;
+  }
+
   /** In-flight build logs keyed by appId, for streamBuildLogs() */
   private buildLogs = new Map<string, string[]>();
   private buildListeners = new Map<string, Set<(line: string) => void>>();

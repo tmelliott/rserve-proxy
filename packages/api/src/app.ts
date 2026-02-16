@@ -10,9 +10,11 @@ import { fileURLToPath } from "node:url";
 
 import { DockerSpawner } from "./spawner/docker-spawner.js";
 import { HealthMonitor } from "./spawner/health-monitor.js";
+import { MetricsCollector } from "./metrics/metrics-collector.js";
 import { appRoutes } from "./routes/apps.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { metricsRoutes, statusRoutes, appStatusHistoryRoutes } from "./routes/metrics.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +25,8 @@ export interface BuildAppOptions extends FastifyServerOptions {
   spawner?: DockerSpawner;
   /** Override the health monitor instance (for testing) */
   healthMonitor?: HealthMonitor;
+  /** Override the metrics collector instance (for testing) */
+  metricsCollector?: MetricsCollector;
 }
 
 /**
@@ -33,6 +37,7 @@ export async function buildApp(opts?: BuildAppOptions) {
   const {
     spawner: customSpawner,
     healthMonitor: customMonitor,
+    metricsCollector: customMetrics,
     ...fastifyOpts
   } = opts ?? {};
 
@@ -57,11 +62,13 @@ export async function buildApp(opts?: BuildAppOptions) {
         },
   );
 
-  // Spawner + Health Monitor (decorated so routes can access them)
+  // Spawner + Health Monitor + Metrics Collector (decorated so routes can access them)
   const spawner = customSpawner ?? new DockerSpawner();
   const healthMonitor = customMonitor ?? new HealthMonitor(spawner);
+  const metricsCollector = customMetrics ?? new MetricsCollector(spawner, healthMonitor);
   app.decorate("spawner", spawner);
   app.decorate("healthMonitor", healthMonitor);
+  app.decorate("metricsCollector", metricsCollector);
 
   // ---------------------------------------------------------------------------
   // Plugins
@@ -146,6 +153,9 @@ export async function buildApp(opts?: BuildAppOptions) {
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(appRoutes, { prefix: "/api/apps" });
   await app.register(healthRoutes, { prefix: "/api/health" });
+  await app.register(metricsRoutes, { prefix: "/api/metrics" });
+  await app.register(statusRoutes, { prefix: "/api/status" });
+  await app.register(appStatusHistoryRoutes, { prefix: "/api/apps" });
 
   // ---------------------------------------------------------------------------
   // Static files (production)
@@ -168,14 +178,16 @@ export async function buildApp(opts?: BuildAppOptions) {
   // Lifecycle hooks
   // ---------------------------------------------------------------------------
 
-  // Start health monitoring when the server is ready
+  // Start health monitoring and metrics collection when the server is ready
   app.addHook("onReady", async () => {
     healthMonitor.start();
+    metricsCollector.start();
   });
 
-  // Stop health monitoring on close
+  // Stop health monitoring and metrics collection on close
   app.addHook("onClose", async () => {
     healthMonitor.stop();
+    metricsCollector.stop();
   });
 
   return app;
