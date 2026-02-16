@@ -135,7 +135,7 @@ export class MetricsCollector {
       result.push({
         appId,
         appName: this.appNames.get(appId) ?? appId,
-        entries: filterByPeriod(entries, period, "timestamp"),
+        entries: filterByPeriod(entries, period, (e) => e.timestamp),
       });
     }
     return result;
@@ -144,7 +144,7 @@ export class MetricsCollector {
   /** Get status history for a single app */
   getAppStatusHistory(appId: string, period: MetricsPeriod = "1h"): StatusHistoryEntry[] {
     const entries = this.statusHistory.get(appId) ?? [];
-    return filterByPeriod(entries, period, "timestamp");
+    return filterByPeriod(entries, period, (e) => e.timestamp);
   }
 
   // -----------------------------------------------------------------------
@@ -345,14 +345,14 @@ export class MetricsCollector {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Filter array by time period, using collectedAt or a custom timestamp field */
-function filterByPeriod<T extends Record<string, unknown>>(
+/** Filter array by time period using an accessor function for the timestamp */
+function filterByPeriod<T>(
   data: T[],
   period: MetricsPeriod,
-  tsField: string = "collectedAt",
+  getTimestamp: (item: T) => string = (item) => (item as { collectedAt: string }).collectedAt,
 ): T[] {
   const cutoff = Date.now() - PERIOD_MS[period];
-  return data.filter((d) => new Date(d[tsField] as string).getTime() >= cutoff);
+  return data.filter((d) => new Date(getTimestamp(d)).getTime() >= cutoff);
 }
 
 /** Round to 2 decimal places */

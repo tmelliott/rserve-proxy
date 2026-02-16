@@ -234,32 +234,29 @@ API directly.
 **Goal:** A real-time monitoring dashboard with uptime history, resource usage,
 and request metrics — both system-wide and per-app.
 
-### 7a. Metrics Collection Backend
+### 7a. Metrics Collection Backend ✓
 
 > Collect and store time-series data from Docker and Traefik.
 
-- [ ] **Status history store** — ring-buffer or Postgres table recording per-app
-      status every 60s (appId, status, timestamp). Retain last 24h in memory,
-      optionally persist to DB for longer history.
-- [ ] **Container stats collector** — new `MetricsCollector` service that polls
-      `dockerode.container.stats()` every 60s for each running container. Extract:
+- [x] **Status history store** — ring-buffer recording per-app status every 60s
+      (appId, status, timestamp). Retains last 24h in memory (1440 entries).
+- [x] **Container stats collector** — `MetricsCollector` service polls
+      `dockerode.container.stats()` every 60s for each running container. Extracts:
   - CPU usage % (from `cpu_stats` delta calculation)
   - Memory usage (RSS) and limit
   - Network RX/TX bytes (delta per interval)
-- [ ] **Cluster-level aggregation** — sum per-app metrics into system totals:
+- [x] **Cluster-level aggregation** — sum per-app metrics into system totals:
       total CPU %, total memory used / available, total network I/O
 - [ ] **Request counting** — scrape Traefik's built-in Prometheus metrics
       endpoint (`/metrics` on the Traefik entrypoint) for per-service
-      `traefik_service_requests_total`, compute requests/min per app
-- [ ] **New API endpoints:**
+      `traefik_service_requests_total`, compute requests/min per app (deferred to 7d)
+- [x] **New API endpoints:**
   - `GET /api/metrics/system` — cluster-wide resource usage over time
-      (CPU %, memory %, network I/O, total requests/min)
   - `GET /api/metrics/apps/:id` — per-app resource usage over time
-      (CPU %, memory MB, network RX/TX, requests/min)
-  - `GET /api/status/history` — all apps' status timeline (last N hours)
+  - `GET /api/status/history` — all apps' status timeline
   - `GET /api/apps/:id/status/history` — single app's status timeline
   - Query params: `?period=1h|6h|24h|7d` to control time range
-- [ ] **Tests** — metrics collector unit tests with mocked Docker stats
+- [x] **Tests** — 10 collector unit tests + 12 route tests (111 total)
 
 ### 7b. System Status Dashboard (UI)
 
