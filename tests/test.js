@@ -25,6 +25,7 @@ async function main() {
     add: Robj.ocap([z.number(), z.number()], Robj.numeric(1)),
     greet: Robj.ocap([z.string()], Robj.character(1)),
     test: Robj.ocap([z.number()], Robj.numeric(1)),
+    hungry_job: Robj.ocap([z.number(), z.number()], Robj.numeric(2)),
   });
 
   // Test: add
@@ -37,13 +38,17 @@ async function main() {
   console.log('greet("World") =', greeting);
   console.assert(
     greeting === "Hello, World!",
-    `Expected "Hello, World!", got "${greeting}"`
+    `Expected "Hello, World!", got "${greeting}"`,
   );
 
   // Test: test (always returns 2)
   const t = await app.test(0);
   console.log("test(0) =", t);
   console.assert(t === 2, `Expected 2, got ${t}`);
+
+  // Test: hungry_job
+  const bootEst = await app.hungry_job(100000, 1000);
+  console.log("bootMean: ", bootEst[0], "; bootVar: ", bootEst[1]);
 
   console.log("\nAll tests passed!");
   R.close();
