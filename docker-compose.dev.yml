@@ -10,6 +10,7 @@ services:
       - "8880:80"       # http://localhost:8880 instead of :80
       # - "8443:443"
       - "8881:8080"     # Traefik dashboard: http://localhost:8881
+      - "8882:8082"     # Prometheus metrics: http://localhost:8882/metrics
 
   postgres:
     ports:
