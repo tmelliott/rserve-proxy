@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-bun.lock
 
 # Environment
 .env
@@ -31,6 +30,4 @@ build/
 # Data / state
 data/
 
-# Drizzle
-drizzle/
 cookies.txt
