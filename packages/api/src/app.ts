@@ -123,35 +123,36 @@ export async function buildApp(opts?: BuildAppOptions) {
   // ---------------------------------------------------------------------------
   // Global error handler — normalise error responses
   // ---------------------------------------------------------------------------
-  app.setErrorHandler((error: FastifyError, request, reply) => {
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
     // Validation errors from Typebox schemas (Fastify AJV)
     if (error.validation) {
       const details = error.validation.map((v) => ({
         field: v.instancePath || (v.params as Record<string, string>)?.missingProperty || "body",
         message: v.message ?? "Invalid value",
       }));
-      return reply.status(400).send({ error: "Validation failed", details });
+      reply.status(400).send({ error: "Validation failed", details });
+      return;
     }
 
     // Rate limit errors
     if (error.statusCode === 429) {
-      return reply.status(429).send({
+      reply.status(429).send({
         error: "Too many requests. Please try again later.",
       });
+      return;
     }
 
     // Known HTTP errors (4xx)
     if (error.statusCode && error.statusCode < 500) {
-      return reply.status(error.statusCode).send({
+      reply.status(error.statusCode).send({
         error: error.message,
       });
+      return;
     }
 
     // Unexpected errors — log full details, return generic message
-    request.log.error(error, "Unhandled error");
-    return reply.status(error.statusCode ?? 500).send({
+    reply.status(error.statusCode ?? 500).send({
       error: isDev ? error.message : "Internal server error",
-      ...(isDev && { stack: error.stack }),
     });
   });
 

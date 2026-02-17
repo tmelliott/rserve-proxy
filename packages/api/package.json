@@ -12,7 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
-    "test": "vitest run",
+    "test": "bun test",
     "test:watch": "vitest",
     "docker:cleanup": "tsx src/scripts/cleanup.ts"
   },

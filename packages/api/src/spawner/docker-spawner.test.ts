@@ -6,74 +6,42 @@ import { join } from "node:path";
 import type { AppConfig } from "@rserve-proxy/shared";
 
 // ---------------------------------------------------------------------------
-// Mock dockerode — vi.hoisted() ensures these are available to vi.mock()
+// Mock dockerode — define mocks at module scope for vi.mock() references
 // ---------------------------------------------------------------------------
 
-const {
-  mockStart,
-  mockStop,
-  mockRemove,
-  mockRestart,
-  mockCreateContainer,
-  mockListContainers,
-  mockListImages,
-  mockGetContainer,
-  mockGetImage,
-  mockBuildImage,
-  mockExecFileSync,
-  fakeBuildStream,
-} = vi.hoisted(() => {
-  const { Readable: R } = require("node:stream");
+function fakeBuildStream(lines: { stream?: string; error?: string }[]) {
+  const data = lines.map((l: unknown) => JSON.stringify(l)).join("\n") + "\n";
+  return Readable.from([Buffer.from(data)]);
+}
 
-  function fakeBuildStream(lines: { stream?: string; error?: string }[]) {
-    const data = lines.map((l: unknown) => JSON.stringify(l)).join("\n") + "\n";
-    return R.from([Buffer.from(data)]);
-  }
-
-  const mockStart = vi.fn().mockResolvedValue(undefined);
-  const mockStop = vi.fn().mockResolvedValue(undefined);
-  const mockRemove = vi.fn().mockResolvedValue(undefined);
-  const mockRestart = vi.fn().mockResolvedValue(undefined);
-  const mockCreateContainer = vi.fn().mockResolvedValue({
-    start: mockStart,
-    id: "abc123def456",
-  });
-  const mockListContainers = vi.fn().mockResolvedValue([]);
-  const mockListImages = vi.fn().mockResolvedValue([]);
-  const mockGetContainer = vi.fn().mockReturnValue({
-    stop: mockStop,
-    remove: mockRemove,
-    restart: mockRestart,
-  });
-  const mockGetImage = vi.fn().mockReturnValue({
-    remove: vi.fn().mockResolvedValue(undefined),
-  });
-  const mockBuildImage = vi.fn().mockImplementation(() =>
-    Promise.resolve(
-      fakeBuildStream([
-        { stream: "Step 1/4 : FROM rserve-base:4.4.1\n" },
-        { stream: "Successfully built abc123\n" },
-        { stream: "Successfully tagged rserve-app-test:hash123\n" },
-      ]),
-    ),
-  );
-  const mockExecFileSync = vi.fn();
-
-  return {
-    mockStart,
-    mockStop,
-    mockRemove,
-    mockRestart,
-    mockCreateContainer,
-    mockListContainers,
-    mockListImages,
-    mockGetContainer,
-    mockGetImage,
-    mockBuildImage,
-    mockExecFileSync,
-    fakeBuildStream,
-  };
+const mockStart = vi.fn().mockResolvedValue(undefined);
+const mockStop = vi.fn().mockResolvedValue(undefined);
+const mockRemove = vi.fn().mockResolvedValue(undefined);
+const mockRestart = vi.fn().mockResolvedValue(undefined);
+const mockCreateContainer = vi.fn().mockResolvedValue({
+  start: mockStart,
+  id: "abc123def456",
 });
+const mockListContainers = vi.fn().mockResolvedValue([]);
+const mockListImages = vi.fn().mockResolvedValue([]);
+const mockGetContainer = vi.fn().mockReturnValue({
+  stop: mockStop,
+  remove: mockRemove,
+  restart: mockRestart,
+});
+const mockGetImage = vi.fn().mockReturnValue({
+  remove: vi.fn().mockResolvedValue(undefined),
+});
+const mockBuildImage = vi.fn().mockImplementation(() =>
+  Promise.resolve(
+    fakeBuildStream([
+      { stream: "Step 1/4 : FROM rserve-base:4.4.1\n" },
+      { stream: "Successfully built abc123\n" },
+      { stream: "Successfully tagged rserve-app-test:hash123\n" },
+    ]),
+  ),
+);
+const mockExecFileSync = vi.fn();
 
 vi.mock("dockerode", () => {
   const DockerMock = function (this: Record<string, unknown>) {
@@ -87,10 +55,9 @@ vi.mock("dockerode", () => {
   return { default: DockerMock };
 });
 
-vi.mock("tar-fs", () => {
-  const { Readable: R } = require("node:stream");
-  return { pack: vi.fn().mockImplementation(() => R.from([Buffer.from("fake-tar")])) };
-});
+vi.mock("tar-fs", () => ({
+  pack: vi.fn().mockImplementation(() => Readable.from([Buffer.from("fake-tar")])),
+}));
 
 vi.mock("node:child_process", () => ({
   execFileSync: mockExecFileSync,

@@ -47,20 +47,22 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         .limit(1);
 
       if (!user) {
-        return reply.status(401).send({ error: "Invalid credentials" });
+        reply.code(401);
+        return { error: "Invalid credentials" };
       }
 
       // Verify password
       const valid = await verify(user.passwordHash, password);
       if (!valid) {
-        return reply.status(401).send({ error: "Invalid credentials" });
+        reply.code(401);
+        return { error: "Invalid credentials" };
       }
 
       // Store user info in session
       request.session.userId = user.id;
       request.session.role = user.role;
 
-      return reply.send({
+      return {
         user: {
           id: user.id,
           username: user.username,
@@ -68,7 +70,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           role: user.role,
           createdAt: user.createdAt,
         },
-      });
+      };
     },
   );
 
@@ -77,9 +79,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    *
    * Destroys the current session and clears the session cookie.
    */
-  app.post("/logout", async (request, reply) => {
+  app.post("/logout", async (request) => {
     await request.session.destroy();
-    return reply.send({ ok: true });
+    return { ok: true };
   });
 
   /**
@@ -104,10 +106,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (!user) {
       // Session refers to a deleted user — clean up
       await request.session.destroy();
-      return reply.status(401).send({ error: "User not found" });
+      reply.code(401);
+      return { error: "User not found" };
     }
 
-    return reply.send({ user });
+    return { user };
   });
 
   // -----------------------------------------------------------------------
@@ -134,15 +137,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         .limit(1);
 
       if (!user) {
-        return reply.status(401).send({ error: "User not found" });
+        reply.code(401);
+        return { error: "User not found" };
       }
 
       // Verify current password
       const valid = await verify(user.passwordHash, currentPassword);
       if (!valid) {
-        return reply
-          .status(403)
-          .send({ error: "Current password is incorrect" });
+        reply.code(403);
+        return { error: "Current password is incorrect" };
       }
 
       // Hash and save new password
@@ -152,7 +155,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         .set({ passwordHash: newHash, updatedAt: new Date() })
         .where(eq(users.id, user.id));
 
-      return reply.send({ ok: true });
+      return { ok: true };
     },
   );
 
@@ -192,7 +195,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         })
         .returning();
 
-      return reply.status(201).send({
+      reply.code(201);
+      return {
         token: {
           id: token.id,
           name: token.name,
@@ -203,7 +207,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           lastUsedAt: token.lastUsedAt,
           createdAt: token.createdAt,
         },
-      });
+      };
     },
   );
 
@@ -213,7 +217,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * List all API tokens for the current user.
    * Returns prefix only — never the raw token or hash.
    */
-  app.get("/tokens", { onRequest: requireAuth }, async (request, reply) => {
+  app.get("/tokens", { onRequest: requireAuth }, async (request) => {
     const tokens = await db
       .select({
         id: apiTokens.id,
@@ -228,7 +232,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(apiTokens.userId, request.session.userId!))
       .orderBy(apiTokens.createdAt);
 
-    return reply.send({ tokens });
+    return { tokens };
   });
 
   /**
@@ -253,10 +257,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         .returning({ id: apiTokens.id });
 
       if (deleted.length === 0) {
-        return reply.status(404).send({ error: "Token not found" });
+        reply.code(404);
+        return { error: "Token not found" };
       }
 
-      return reply.send({ ok: true });
+      return { ok: true };
     },
   );
 };

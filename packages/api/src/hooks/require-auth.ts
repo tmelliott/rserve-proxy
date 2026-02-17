@@ -83,7 +83,7 @@ export async function requireAuth(
     return;
   }
 
-  return reply.status(401).send({ error: "Authentication required" });
+  reply.status(401).send({ error: "Authentication required" });
 }
 
 /**
@@ -99,6 +99,6 @@ export async function requireAdmin(
   if (reply.sent) return;
 
   if (request.session.role !== "admin") {
-    return reply.status(403).send({ error: "Admin access required" });
+    await reply.status(403).send({ error: "Admin access required" });
   }
 }
