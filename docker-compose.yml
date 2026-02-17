@@ -35,7 +35,10 @@ services:
       - "traefik.http.services.manager.loadbalancer.server.port=3000"
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://rserve:rserve@postgres:5432/rserve
+      DATABASE_URL: postgres://rserve:${DB_PASSWORD:-rserve}@postgres:5432/rserve
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      TRAEFIK_METRICS_URL: http://traefik:8082/metrics
       PORT: "3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -49,7 +52,7 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: rserve
-      POSTGRES_PASSWORD: rserve
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rserve}
       POSTGRES_DB: rserve
     volumes:
       - pgdata:/var/lib/postgresql/data

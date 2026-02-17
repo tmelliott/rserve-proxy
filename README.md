@@ -120,12 +120,38 @@ binding, WebSocket setup, and health checks.
 See `tests/testapp.R` for a working example and `tests/test.js` for a Node
 client that connects via `rserve-ts`.
 
+## Quick Install (VPS)
+
+On a server with Docker installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tmelliott/rserve-proxy/main/install.sh | bash
+```
+
+This clones the repo, generates random secrets, builds the Docker images, and
+starts the stack. The admin password is printed on first run (and saved in `.env`).
+
+To update an existing install:
+
+```bash
+cd ~/rserve-proxy && git pull && docker compose up -d --build
+```
+
 ## Development
 
 ```bash
 bun install          # Install all workspace dependencies
 bun run dev          # Start API + UI in development mode
 bun run diagrams     # Regenerate architecture diagrams (requires d2)
+```
+
+The dev server loads environment variables from `../../.env` (monorepo root).
+Copy `.env.example` to `.env` and adjust as needed.
+
+Docker services (Traefik + Postgres) for local dev:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 Diagrams are authored as [D2](https://d2lang.com/) source files in `docs/diagrams/`

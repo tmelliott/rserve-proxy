@@ -50,6 +50,7 @@ COPY --from=builder /app/packages/shared/package.json packages/shared/
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/api/package.json packages/api/
 COPY --from=builder /app/packages/api/dist packages/api/dist
+COPY --from=builder /app/packages/api/drizzle packages/api/drizzle
 COPY --from=builder /app/packages/ui/dist packages/ui/dist
 
 EXPOSE 3000

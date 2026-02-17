@@ -1,4 +1,12 @@
 import { buildApp } from "./app.js";
+import { runMigrations, seedAdminUser } from "./db/migrate.js";
+
+// Run migrations and seed before starting the server
+if (process.env.NODE_ENV !== "test") {
+  console.log("Running database migrations...");
+  await runMigrations();
+  await seedAdminUser();
+}
 
 const app = await buildApp();
 
