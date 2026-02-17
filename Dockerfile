@@ -11,8 +11,8 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/api/package.json packages/api/
 COPY packages/ui/package.json packages/ui/
 
-# Install all dependencies
-RUN bun install --frozen-lockfile
+# Install all dependencies (ignore-scripts: husky postinstall fails without .git)
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # Copy source
 COPY tsconfig.json ./
