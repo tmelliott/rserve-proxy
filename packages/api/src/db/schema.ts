@@ -5,6 +5,10 @@ import {
   integer,
   json,
   uuid,
+  serial,
+  real,
+  bigint,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -49,3 +53,48 @@ export const apps = pgTable("apps", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Metrics persistence (Phase 7 — high-resolution time-series)
+// ---------------------------------------------------------------------------
+
+export const appMetricsPoints = pgTable(
+  "app_metrics_points",
+  {
+    id: serial("id").primaryKey(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    cpuPercent: real("cpu_percent").notNull(),
+    memoryMB: real("memory_mb").notNull(),
+    memoryLimitMB: real("memory_limit_mb").notNull(),
+    networkRxBytes: bigint("network_rx_bytes", { mode: "number" }).notNull(),
+    networkTxBytes: bigint("network_tx_bytes", { mode: "number" }).notNull(),
+    requestsPerMin: real("requests_per_min"),
+    containers: integer("containers").notNull(),
+    collectedAt: timestamp("collected_at").notNull(),
+  },
+  (table) => [
+    index("app_metrics_collected_at_idx").on(table.collectedAt),
+    index("app_metrics_app_collected_idx").on(table.appId, table.collectedAt),
+  ],
+);
+
+export const systemMetricsPoints = pgTable(
+  "system_metrics_points",
+  {
+    id: serial("id").primaryKey(),
+    cpuPercent: real("cpu_percent").notNull(),
+    memoryMB: real("memory_mb").notNull(),
+    memoryLimitMB: real("memory_limit_mb").notNull(),
+    networkRxBytes: bigint("network_rx_bytes", { mode: "number" }).notNull(),
+    networkTxBytes: bigint("network_tx_bytes", { mode: "number" }).notNull(),
+    requestsPerMin: real("requests_per_min"),
+    activeContainers: integer("active_containers").notNull(),
+    activeApps: integer("active_apps").notNull(),
+    collectedAt: timestamp("collected_at").notNull(),
+  },
+  (table) => [
+    index("system_metrics_collected_at_idx").on(table.collectedAt),
+  ],
+);

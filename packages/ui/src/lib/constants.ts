@@ -1,7 +1,7 @@
 import type { AppStatus } from "@rserve-proxy/shared";
 
 export const POLL_INTERVAL_MS = 5_000;
-export const METRICS_POLL_MS = 60_000;
+export const METRICS_POLL_MS = 15_000;
 export const STATUS_POLL_MS = 15_000;
 
 export const STATUS_CONFIG: Record<

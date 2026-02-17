@@ -63,6 +63,28 @@ export interface AppStatusHistory {
 }
 
 // ---------------------------------------------------------------------------
+// Aggregated snapshots (time-bucketed avg/min/max for longer periods)
+// ---------------------------------------------------------------------------
+
+/** Aggregated value with avg/min/max for a time bucket */
+export interface AggregatedValue {
+  avg: number;
+  min: number;
+  max: number;
+}
+
+/** Time-bucketed aggregation of resource metrics (used for 7d view) */
+export interface AggregatedSnapshot {
+  cpuPercent: AggregatedValue;
+  memoryMB: AggregatedValue;
+  networkRxBytes: AggregatedValue;
+  networkTxBytes: AggregatedValue;
+  requestsPerMin: AggregatedValue | null;
+  /** Bucket start time (ISO 8601) */
+  collectedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // API response envelopes
 // ---------------------------------------------------------------------------
 
@@ -71,11 +93,15 @@ export type MetricsPeriod = "1h" | "6h" | "24h" | "7d";
 export interface SystemMetricsResponse {
   period: MetricsPeriod;
   dataPoints: SystemMetricsSnapshot[];
+  /** Time-bucketed aggregates (present for 7d period) */
+  aggregated?: AggregatedSnapshot[];
 }
 
 export interface AppMetricsResponse {
   period: MetricsPeriod;
   dataPoints: AppMetricsSnapshot[];
+  /** Time-bucketed aggregates (present for 7d period) */
+  aggregated?: AggregatedSnapshot[];
 }
 
 export interface StatusHistoryResponse {

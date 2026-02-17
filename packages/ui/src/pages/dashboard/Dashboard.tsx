@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import type {
   MetricsPeriod,
   SystemMetricsSnapshot,
+  AggregatedSnapshot,
   AppStatusHistory,
   AppWithStatus,
 } from "@rserve-proxy/shared";
@@ -18,6 +19,7 @@ export function Dashboard() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetricsSnapshot[]>(
     [],
   );
+  const [aggregated, setAggregated] = useState<AggregatedSnapshot[] | undefined>();
   const [statusApps, setStatusApps] = useState<AppStatusHistory[]>([]);
   const [allApps, setAllApps] = useState<AppWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,7 @@ export function Dashboard() {
     try {
       const res = await api.metrics.system(period);
       setSystemMetrics(res.dataPoints);
+      setAggregated(res.aggregated);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load metrics");
@@ -114,7 +117,7 @@ export function Dashboard() {
           <UptimeGrid apps={mergedApps} period={period} />
 
           {/* Resource charts */}
-          <ResourceCharts dataPoints={systemMetrics} period={period} />
+          <ResourceCharts dataPoints={systemMetrics} period={period} aggregated={aggregated} />
         </>
       )}
     </div>

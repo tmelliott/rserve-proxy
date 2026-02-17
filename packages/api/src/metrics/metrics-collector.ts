@@ -2,8 +2,10 @@
  * Metrics Collector — periodically polls Docker for container resource usage
  * and records status history from the HealthMonitor.
  *
- * Maintains in-memory ring buffers (capped at MAX_ENTRIES = 1440 ≈ 24h at 1/min)
- * so the API can serve time-windowed metrics without external storage.
+ * Storage strategy (tiered):
+ *  - In-memory ring buffers for fast "1h" queries (MAX_ENTRIES at 10s resolution)
+ *  - Postgres tables for longer periods (6h/24h raw, 7d aggregated)
+ *  - Auto-prunes DB rows older than 7 days
  *
  * IMPORTANT: Like the spawner module, this is independent of the web
  * framework. It receives its dependencies via constructor injection.
@@ -18,6 +20,7 @@ import type {
   StatusHistoryEntry,
   MetricsPeriod,
   AppStatusHistory,
+  AggregatedSnapshot,
 } from "@rserve-proxy/shared";
 import { scrapeTraefikMetrics } from "./traefik-scraper.js";
 
@@ -25,16 +28,33 @@ import { scrapeTraefikMetrics } from "./traefik-scraper.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_INTERVAL_MS = 60_000; // 1 minute
-const MAX_ENTRIES = 1440; // 24 hours at 1/min
+const DEFAULT_INTERVAL_MS = 10_000; // 10 seconds
+const MAX_ENTRIES = 360; // 1 hour at 10s intervals
+const PRUNE_EVERY_N_CYCLES = 6; // Prune every ~60s (6 × 10s)
+const RETENTION_DAYS = 7;
 
 /** Map period strings to milliseconds */
-const PERIOD_MS: Record<MetricsPeriod, number> = {
+export const PERIOD_MS: Record<MetricsPeriod, number> = {
   "1h": 60 * 60 * 1000,
   "6h": 6 * 60 * 60 * 1000,
   "24h": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
 };
+
+// ---------------------------------------------------------------------------
+// DB interface (to avoid coupling to drizzle directly)
+// ---------------------------------------------------------------------------
+
+/** Minimal DB interface for persistence — allows mocking in tests */
+export interface MetricsDb {
+  insertAppMetrics(snapshots: AppMetricsSnapshot[]): Promise<void>;
+  insertSystemMetrics(snapshot: SystemMetricsSnapshot): Promise<void>;
+  queryAppMetrics(appId: string, since: Date): Promise<AppMetricsSnapshot[]>;
+  querySystemMetrics(since: Date): Promise<SystemMetricsSnapshot[]>;
+  queryAppMetricsAggregated(appId: string, since: Date, bucketMinutes: number): Promise<AggregatedSnapshot[]>;
+  querySystemMetricsAggregated(since: Date, bucketMinutes: number): Promise<AggregatedSnapshot[]>;
+  pruneOlderThan(date: Date): Promise<void>;
+}
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -49,10 +69,12 @@ interface PreviousStats {
 }
 
 export interface MetricsCollectorOptions {
-  /** Collection interval in ms (default: 60000 = 1 min) */
+  /** Collection interval in ms (default: 10000 = 10s) */
   intervalMs?: number;
   /** Traefik Prometheus metrics URL (e.g. http://traefik:8082/metrics) */
   traefikUrl?: string;
+  /** Database persistence layer (optional — metrics are in-memory only without it) */
+  metricsDb?: MetricsDb;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +86,9 @@ export class MetricsCollector {
   private healthMonitor: HealthMonitor;
   private intervalMs: number;
   private traefikUrl: string | null;
+  private metricsDb: MetricsDb | null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private cycleCount = 0;
 
   /** Per-app resource snapshots (ring buffer) */
   private appMetrics = new Map<string, AppMetricsSnapshot[]>();
@@ -96,6 +120,7 @@ export class MetricsCollector {
     this.healthMonitor = healthMonitor;
     this.intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.traefikUrl = options?.traefikUrl ?? null;
+    this.metricsDb = options?.metricsDb ?? null;
   }
 
   /** Start the collection loop */
@@ -133,15 +158,43 @@ export class MetricsCollector {
   // Public query methods
   // -----------------------------------------------------------------------
 
-  /** Get system-wide metrics for a time period */
+  /** Get system-wide metrics for a time period (in-memory only) */
   getSystemMetrics(period: MetricsPeriod = "1h"): SystemMetricsSnapshot[] {
     return filterByPeriod(this.systemMetrics, period);
   }
 
-  /** Get per-app metrics for a time period */
+  /** Get per-app metrics for a time period (in-memory only) */
   getAppMetrics(appId: string, period: MetricsPeriod = "1h"): AppMetricsSnapshot[] {
     const data = this.appMetrics.get(appId) ?? [];
     return filterByPeriod(data, period);
+  }
+
+  /** Get system metrics from DB for longer periods */
+  async getSystemMetricsFromDb(period: MetricsPeriod): Promise<SystemMetricsSnapshot[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    return this.metricsDb.querySystemMetrics(since);
+  }
+
+  /** Get app metrics from DB for longer periods */
+  async getAppMetricsFromDb(appId: string, period: MetricsPeriod): Promise<AppMetricsSnapshot[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    return this.metricsDb.queryAppMetrics(appId, since);
+  }
+
+  /** Get aggregated system metrics from DB (for 7d view) */
+  async getSystemMetricsAggregated(period: MetricsPeriod, bucketMinutes = 5): Promise<AggregatedSnapshot[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    return this.metricsDb.querySystemMetricsAggregated(since, bucketMinutes);
+  }
+
+  /** Get aggregated app metrics from DB (for 7d view) */
+  async getAppMetricsAggregated(appId: string, period: MetricsPeriod, bucketMinutes = 5): Promise<AggregatedSnapshot[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    return this.metricsDb.queryAppMetricsAggregated(appId, since, bucketMinutes);
   }
 
   /** Get status history for all apps */
@@ -170,6 +223,7 @@ export class MetricsCollector {
   /** Run a single collection cycle */
   private async collect(): Promise<void> {
     const now = new Date().toISOString();
+    this.cycleCount++;
 
     // 1. Record status from health monitor
     this.recordStatusHistory(now);
@@ -272,7 +326,8 @@ export class MetricsCollector {
       }
     }
 
-    // 4. Store per-app metrics
+    // 4. Store per-app metrics (in-memory ring buffer)
+    const appSnapshots: AppMetricsSnapshot[] = [];
     for (const [appId, acc] of appAccum) {
       const snapshot: AppMetricsSnapshot = {
         appId,
@@ -286,9 +341,10 @@ export class MetricsCollector {
         collectedAt: now,
       };
       pushRingBuffer(this.appMetrics, appId, snapshot, MAX_ENTRIES);
+      appSnapshots.push(snapshot);
     }
 
-    // 5. Store system metrics
+    // 5. Store system metrics (in-memory ring buffer)
     const systemSnapshot: SystemMetricsSnapshot = {
       cpuPercent: round2(totalCpu),
       memoryMB: round2(totalMemory),
@@ -304,6 +360,31 @@ export class MetricsCollector {
     if (this.systemMetrics.length > MAX_ENTRIES) {
       this.systemMetrics.splice(0, this.systemMetrics.length - MAX_ENTRIES);
     }
+
+    // 6. Persist to database (fire-and-forget)
+    if (this.metricsDb) {
+      this.persistToDb(appSnapshots, systemSnapshot).catch(() => {});
+    }
+
+    // 7. Periodic pruning (~every 60s)
+    if (this.metricsDb && this.cycleCount % PRUNE_EVERY_N_CYCLES === 0) {
+      const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      this.metricsDb.pruneOlderThan(cutoff).catch(() => {});
+    }
+  }
+
+  /** Persist snapshots to database */
+  private async persistToDb(
+    appSnapshots: AppMetricsSnapshot[],
+    systemSnapshot: SystemMetricsSnapshot,
+  ): Promise<void> {
+    if (!this.metricsDb) return;
+    await Promise.all([
+      appSnapshots.length > 0
+        ? this.metricsDb.insertAppMetrics(appSnapshots)
+        : Promise.resolve(),
+      this.metricsDb.insertSystemMetrics(systemSnapshot),
+    ]);
   }
 
   /** Record current status from health monitor into status history */

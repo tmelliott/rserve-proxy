@@ -1,7 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { HealthMonitor } from "./health-monitor.js";
 import type { DockerSpawner } from "./docker-spawner.js";
 import type { AppStatus, ContainerInfo } from "@rserve-proxy/shared";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Poll until a condition is met (replaces vi.waitFor which bun doesn't support) */
+async function waitFor(fn: () => void, timeout = 500): Promise<void> {
+  const start = Date.now();
+  while (true) {
+    try {
+      fn();
+      return;
+    } catch {
+      if (Date.now() - start > timeout) throw new Error("waitFor timed out");
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Mock spawner
@@ -76,8 +94,7 @@ describe("HealthMonitor", () => {
     monitor.track("app-1");
     monitor.start();
 
-    // Wait for at least one poll
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(monitor.getSnapshot("app-1")).toBeDefined();
     });
 
@@ -100,7 +117,7 @@ describe("HealthMonitor", () => {
     monitor = new HealthMonitor(spawner, { intervalMs: 50 });
     monitor.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(monitor.getSnapshot("discovered-app")).toBeDefined();
     });
 
@@ -126,7 +143,7 @@ describe("HealthMonitor", () => {
     monitor.track("app-1");
     monitor.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(onChange).toHaveBeenCalled();
     });
 
@@ -143,7 +160,7 @@ describe("HealthMonitor", () => {
     monitor.track("app-1");
     monitor.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(monitor.getSnapshot("app-1")).toBeDefined();
     });
 
@@ -161,7 +178,7 @@ describe("HealthMonitor", () => {
     monitor.track("app-2");
     monitor.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(monitor.getAllSnapshots()).toHaveLength(2);
     });
 

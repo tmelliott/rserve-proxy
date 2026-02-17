@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { DockerSpawner } from "./spawner/docker-spawner.js";
 import { HealthMonitor } from "./spawner/health-monitor.js";
 import { MetricsCollector } from "./metrics/metrics-collector.js";
+import { DrizzleMetricsDb } from "./metrics/drizzle-metrics-db.js";
 import { appRoutes } from "./routes/apps.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
@@ -68,8 +69,10 @@ export async function buildApp(opts?: BuildAppOptions) {
   const spawner = customSpawner ?? new DockerSpawner();
   const healthMonitor = customMonitor ?? new HealthMonitor(spawner);
   const traefikUrl = process.env.TRAEFIK_METRICS_URL || "http://traefik:8082/metrics";
+  const metricsDb = process.env.NODE_ENV === "test" ? undefined : new DrizzleMetricsDb(db);
   const metricsCollector = customMetrics ?? new MetricsCollector(spawner, healthMonitor, {
     traefikUrl: process.env.NODE_ENV === "test" ? undefined : traefikUrl,
+    metricsDb,
   });
   app.decorate("spawner", spawner);
   app.decorate("healthMonitor", healthMonitor);

@@ -1,8 +1,27 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { MetricsCollector } from "./metrics-collector.js";
+import type { MetricsDb } from "./metrics-collector.js";
 import type { DockerSpawner } from "../spawner/docker-spawner.js";
 import type { HealthMonitor, AppHealthSnapshot } from "../spawner/health-monitor.js";
 import type { AppStatus } from "@rserve-proxy/shared";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Poll until a condition is met (replaces vi.waitFor which bun doesn't support) */
+async function waitFor(fn: () => void, timeout = 500): Promise<void> {
+  const start = Date.now();
+  while (true) {
+    try {
+      fn();
+      return;
+    } catch {
+      if (Date.now() - start > timeout) throw new Error("waitFor timed out");
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -33,6 +52,24 @@ function createMockHealthMonitor(overrides?: Partial<HealthMonitor>) {
     isRunning: false,
     ...overrides,
   } as unknown as HealthMonitor;
+}
+
+function createMockMetricsDb(): MetricsDb & { calls: Record<string, unknown[][]> } {
+  const calls: Record<string, unknown[][]> = {
+    insertAppMetrics: [],
+    insertSystemMetrics: [],
+    pruneOlderThan: [],
+  };
+  return {
+    calls,
+    insertAppMetrics: vi.fn(async (...args: unknown[]) => { calls.insertAppMetrics.push(args); }),
+    insertSystemMetrics: vi.fn(async (...args: unknown[]) => { calls.insertSystemMetrics.push(args); }),
+    queryAppMetrics: vi.fn().mockResolvedValue([]),
+    querySystemMetrics: vi.fn().mockResolvedValue([]),
+    queryAppMetricsAggregated: vi.fn().mockResolvedValue([]),
+    querySystemMetricsAggregated: vi.fn().mockResolvedValue([]),
+    pruneOlderThan: vi.fn(async (...args: unknown[]) => { calls.pruneOlderThan.push(args); }),
+  };
 }
 
 /** Create a realistic Docker stats response */
@@ -104,7 +141,7 @@ describe("MetricsCollector", () => {
     collector.setAppName("app-1", "My App");
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const history = collector.getStatusHistory("1h");
       expect(history.length).toBeGreaterThanOrEqual(2);
     });
@@ -143,23 +180,18 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    // Wait for at least 2 collections so we get CPU deltas
-    await vi.waitFor(
-      () => {
-        const metrics = collector.getAppMetrics("app-1", "1h");
-        expect(metrics.length).toBeGreaterThanOrEqual(2);
-      },
-      { timeout: 500 },
-    );
+    await waitFor(() => {
+      const metrics = collector.getAppMetrics("app-1", "1h");
+      expect(metrics.length).toBeGreaterThanOrEqual(2);
+    });
 
     const appMetrics = collector.getAppMetrics("app-1", "1h");
     expect(appMetrics[0].appId).toBe("app-1");
     expect(appMetrics[0].memoryMB).toBeCloseTo(128, 0);
     expect(appMetrics[0].memoryLimitMB).toBeCloseTo(512, 0);
     expect(appMetrics[0].containers).toBe(1);
-    expect(appMetrics[0].requestsPerMin).toBeNull(); // Phase 7d
+    expect(appMetrics[0].requestsPerMin).toBeNull();
 
-    // System metrics should also be populated
     const sysMetrics = collector.getSystemMetrics("1h");
     expect(sysMetrics.length).toBeGreaterThanOrEqual(2);
     expect(sysMetrics[0].activeContainers).toBe(1);
@@ -174,7 +206,6 @@ describe("MetricsCollector", () => {
         return Promise.resolve(
           createMockStats({
             cpu_stats: {
-              // Increase CPU each call to get a non-zero delta
               cpu_usage: { total_usage: callCount * 100_000_000 },
               system_cpu_usage: callCount * 1_000_000_000,
               online_cpus: 4,
@@ -198,15 +229,11 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(
-      () => {
-        const metrics = collector.getAppMetrics("app-1", "1h");
-        // Second data point should have CPU > 0 (delta calculation)
-        expect(metrics.length).toBeGreaterThanOrEqual(2);
-        expect(metrics[1].cpuPercent).toBeGreaterThan(0);
-      },
-      { timeout: 500 },
-    );
+    await waitFor(() => {
+      const metrics = collector.getAppMetrics("app-1", "1h");
+      expect(metrics.length).toBeGreaterThanOrEqual(2);
+      expect(metrics[1].cpuPercent).toBeGreaterThan(0);
+    });
   });
 
   it("handles Docker unavailable gracefully", async () => {
@@ -218,8 +245,7 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    // Should not throw; system metrics should record zeros
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const sysMetrics = collector.getSystemMetrics("1h");
       expect(sysMetrics.length).toBeGreaterThanOrEqual(1);
     });
@@ -240,7 +266,7 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const sysMetrics = collector.getSystemMetrics("1h");
       expect(sysMetrics.length).toBeGreaterThanOrEqual(1);
     });
@@ -257,11 +283,10 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
     });
 
-    // All recent data should appear in any period
     expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
     expect(collector.getSystemMetrics("24h").length).toBeGreaterThanOrEqual(1);
     expect(collector.getSystemMetrics("7d").length).toBeGreaterThanOrEqual(1);
@@ -279,7 +304,7 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const entries = collector.getAppStatusHistory("app-1", "1h");
       expect(entries.length).toBeGreaterThanOrEqual(1);
     });
@@ -309,14 +334,13 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const metrics = collector.getAppMetrics("app-1", "1h");
       expect(metrics.length).toBeGreaterThanOrEqual(1);
     });
 
     const appMetrics = collector.getAppMetrics("app-1", "1h");
     expect(appMetrics[0].containers).toBe(2);
-    // Memory should be summed: 128 MB * 2 = 256 MB
     expect(appMetrics[0].memoryMB).toBeCloseTo(256, 0);
   });
 
@@ -324,7 +348,6 @@ describe("MetricsCollector", () => {
     let fetchCallCount = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       fetchCallCount++;
-      // First call: baseline counter. Second call: increased counter.
       const count = fetchCallCount === 1 ? 100 : 160;
       const body =
         `traefik_service_requests_total{code="200",method="GET",protocol="http",service="test-slug@docker"} ${count}`;
@@ -351,23 +374,20 @@ describe("MetricsCollector", () => {
     collector.setAppSlug("app-1", "test-slug");
     collector.start();
 
-    // Wait for at least 2 collections so we get a delta
-    await vi.waitFor(
+    await waitFor(
       () => {
         const metrics = collector.getAppMetrics("app-1", "1h");
         expect(metrics.length).toBeGreaterThanOrEqual(2);
-        // Second data point should have a computed request rate
         const withRate = metrics.find((m) => m.requestsPerMin !== null);
         expect(withRate).toBeDefined();
       },
-      { timeout: 1000 },
+      1000,
     );
 
     const appMetrics = collector.getAppMetrics("app-1", "1h");
     const withRate = appMetrics.find((m) => m.requestsPerMin !== null);
     expect(withRate!.requestsPerMin).toBeGreaterThan(0);
 
-    // System metrics should also have requestsPerMin
     const sysMetrics = collector.getSystemMetrics("1h");
     const sysWithRate = sysMetrics.find((m) => m.requestsPerMin !== null);
     expect(sysWithRate).toBeDefined();
@@ -382,7 +402,7 @@ describe("MetricsCollector", () => {
     collector = new MetricsCollector(spawner, monitor, { intervalMs: 50 });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
     });
 
@@ -402,14 +422,75 @@ describe("MetricsCollector", () => {
     });
     collector.start();
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(collector.getSystemMetrics("1h").length).toBeGreaterThanOrEqual(1);
     });
 
-    // Should still record metrics with null requestsPerMin
     const sysMetrics = collector.getSystemMetrics("1h");
     expect(sysMetrics[0].requestsPerMin).toBeNull();
 
     vi.restoreAllMocks();
+  });
+
+  it("persists snapshots to metricsDb when provided", async () => {
+    const mockContainer = {
+      stats: vi.fn().mockResolvedValue(createMockStats()),
+    };
+    const spawner = createMockSpawner({
+      listManagedContainers: vi.fn().mockResolvedValue([
+        { Id: "c1", State: "running", Labels: { "rserve-proxy.app-id": "app-1" } },
+      ]),
+      getDocker: vi.fn().mockReturnValue({
+        getContainer: vi.fn().mockReturnValue(mockContainer),
+      }),
+    });
+    const monitor = createMockHealthMonitor();
+    const mockDb = createMockMetricsDb();
+
+    collector = new MetricsCollector(spawner, monitor, {
+      intervalMs: 50,
+      metricsDb: mockDb,
+    });
+    collector.start();
+
+    await waitFor(() => {
+      expect(mockDb.insertSystemMetrics).toHaveBeenCalled();
+      expect(mockDb.insertAppMetrics).toHaveBeenCalled();
+    });
+  });
+
+  it("delegates DB queries to metricsDb", async () => {
+    const spawner = createMockSpawner();
+    const monitor = createMockHealthMonitor();
+    const mockDb = createMockMetricsDb();
+
+    collector = new MetricsCollector(spawner, monitor, {
+      intervalMs: 1000,
+      metricsDb: mockDb,
+    });
+
+    await collector.getSystemMetricsFromDb("6h");
+    expect(mockDb.querySystemMetrics).toHaveBeenCalledTimes(1);
+
+    await collector.getAppMetricsFromDb("app-1", "24h");
+    expect(mockDb.queryAppMetrics).toHaveBeenCalledTimes(1);
+
+    await collector.getSystemMetricsAggregated("7d");
+    expect(mockDb.querySystemMetricsAggregated).toHaveBeenCalledTimes(1);
+
+    await collector.getAppMetricsAggregated("app-1", "7d");
+    expect(mockDb.queryAppMetricsAggregated).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns empty arrays when no metricsDb configured", async () => {
+    const spawner = createMockSpawner();
+    const monitor = createMockHealthMonitor();
+
+    collector = new MetricsCollector(spawner, monitor, { intervalMs: 1000 });
+
+    expect(await collector.getSystemMetricsFromDb("6h")).toEqual([]);
+    expect(await collector.getAppMetricsFromDb("app-1", "24h")).toEqual([]);
+    expect(await collector.getSystemMetricsAggregated("7d")).toEqual([]);
+    expect(await collector.getAppMetricsAggregated("app-1", "7d")).toEqual([]);
   });
 });

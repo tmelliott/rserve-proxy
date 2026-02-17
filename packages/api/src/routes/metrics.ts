@@ -23,7 +23,19 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
     { schema: { querystring: MetricsQuery } },
     async (request, reply) => {
       const period = (request.query.period ?? "1h") as MetricsPeriod;
-      const dataPoints = app.metricsCollector.getSystemMetrics(period);
+
+      if (period === "1h") {
+        const dataPoints = app.metricsCollector.getSystemMetrics(period);
+        return reply.send({ period, dataPoints });
+      }
+
+      if (period === "7d") {
+        const aggregated = await app.metricsCollector.getSystemMetricsAggregated(period);
+        return reply.send({ period, dataPoints: [], aggregated });
+      }
+
+      // 6h, 24h — raw rows from DB
+      const dataPoints = await app.metricsCollector.getSystemMetricsFromDb(period);
       return reply.send({ period, dataPoints });
     },
   );
@@ -44,7 +56,18 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(404).send({ error: "App not found" });
       }
 
-      const dataPoints = app.metricsCollector.getAppMetrics(id, period);
+      if (period === "1h") {
+        const dataPoints = app.metricsCollector.getAppMetrics(id, period);
+        return reply.send({ period, dataPoints });
+      }
+
+      if (period === "7d") {
+        const aggregated = await app.metricsCollector.getAppMetricsAggregated(id, period);
+        return reply.send({ period, dataPoints: [], aggregated });
+      }
+
+      // 6h, 24h — raw rows from DB
+      const dataPoints = await app.metricsCollector.getAppMetricsFromDb(id, period);
       return reply.send({ period, dataPoints });
     },
   );

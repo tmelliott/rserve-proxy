@@ -87,37 +87,40 @@ function createMockHealthMonitor(): HealthMonitor {
 }
 
 function createMockMetricsCollector(): MetricsCollector {
+  const sysSnapshot = {
+    cpuPercent: 25.5,
+    memoryMB: 256,
+    memoryLimitMB: 1024,
+    networkRxBytes: 10000,
+    networkTxBytes: 5000,
+    requestsPerMin: null,
+    activeContainers: 3,
+    activeApps: 2,
+    collectedAt: new Date().toISOString(),
+  };
+  const appSnapshot = {
+    appId: "00000000-0000-0000-0000-000000000010",
+    cpuPercent: 12.3,
+    memoryMB: 128,
+    memoryLimitMB: 512,
+    networkRxBytes: 5000,
+    networkTxBytes: 2500,
+    requestsPerMin: null,
+    containers: 1,
+    collectedAt: new Date().toISOString(),
+  };
   return {
     start: vi.fn(),
     stop: vi.fn(),
     isRunning: false,
     setAppName: vi.fn(),
-    getSystemMetrics: vi.fn().mockReturnValue([
-      {
-        cpuPercent: 25.5,
-        memoryMB: 256,
-        memoryLimitMB: 1024,
-        networkRxBytes: 10000,
-        networkTxBytes: 5000,
-        requestsPerMin: null,
-        activeContainers: 3,
-        activeApps: 2,
-        collectedAt: new Date().toISOString(),
-      },
-    ]),
-    getAppMetrics: vi.fn().mockReturnValue([
-      {
-        appId: "00000000-0000-0000-0000-000000000010",
-        cpuPercent: 12.3,
-        memoryMB: 128,
-        memoryLimitMB: 512,
-        networkRxBytes: 5000,
-        networkTxBytes: 2500,
-        requestsPerMin: null,
-        containers: 1,
-        collectedAt: new Date().toISOString(),
-      },
-    ]),
+    setAppSlug: vi.fn(),
+    getSystemMetrics: vi.fn().mockReturnValue([sysSnapshot]),
+    getAppMetrics: vi.fn().mockReturnValue([appSnapshot]),
+    getSystemMetricsFromDb: vi.fn().mockResolvedValue([sysSnapshot]),
+    getAppMetricsFromDb: vi.fn().mockResolvedValue([appSnapshot]),
+    getSystemMetricsAggregated: vi.fn().mockResolvedValue([]),
+    getAppMetricsAggregated: vi.fn().mockResolvedValue([]),
     getStatusHistory: vi.fn().mockReturnValue([
       {
         appId: "00000000-0000-0000-0000-000000000010",
@@ -241,7 +244,7 @@ describe("Metrics routes", () => {
 
     it("accepts period query parameter", async () => {
       const cookie = await login();
-
+      queueRows([ADMIN_USER]); // requireAuth session lookup
 
       const res = await app.inject({
         method: "GET",
@@ -255,7 +258,7 @@ describe("Metrics routes", () => {
 
     it("rejects invalid period", async () => {
       const cookie = await login();
-
+      queueRows([ADMIN_USER]); // requireAuth session lookup
 
       const res = await app.inject({
         method: "GET",

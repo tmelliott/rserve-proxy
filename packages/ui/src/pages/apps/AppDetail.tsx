@@ -15,6 +15,7 @@ import {
 import type {
   AppWithStatus,
   AppMetricsSnapshot,
+  AggregatedSnapshot,
   MetricsPeriod,
   StatusHistoryEntry,
 } from "@rserve-proxy/shared";
@@ -46,6 +47,7 @@ export function AppDetail() {
   // Monitoring state
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>("1h");
   const [appMetrics, setAppMetrics] = useState<AppMetricsSnapshot[]>([]);
+  const [appAggregated, setAppAggregated] = useState<AggregatedSnapshot[] | undefined>();
   const [statusEntries, setStatusEntries] = useState<StatusHistoryEntry[]>([]);
 
   const fetchApp = useCallback(async () => {
@@ -82,6 +84,7 @@ export function AppDetail() {
         api.metrics.appStatusHistory(id, metricsPeriod),
       ]);
       setAppMetrics(metricsRes.dataPoints);
+      setAppAggregated(metricsRes.aggregated);
       setStatusEntries(statusRes.entries);
     } catch {
       // Silently fail — metrics are supplemental
@@ -341,7 +344,7 @@ export function AppDetail() {
           latest={appMetrics.length > 0 ? appMetrics[appMetrics.length - 1] : null}
         />
         <UptimeTimeline entries={statusEntries} period={metricsPeriod} />
-        <ResourceCharts dataPoints={appMetrics} period={metricsPeriod} />
+        <ResourceCharts dataPoints={appMetrics} period={metricsPeriod} aggregated={appAggregated} />
       </div>
 
       {/* Error info */}
