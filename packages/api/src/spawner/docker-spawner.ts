@@ -315,12 +315,21 @@ export class DockerSpawner implements ISpawner {
       // Routes to the Rserve HTTP/WebSocket port (8081), NOT the QAP
       // binary port (6311). JS clients connect via WebSocket through
       // Traefik at /<slug>/ — Traefik handles the WS upgrade automatically.
+      const domain = process.env.DOMAIN;
+      const useTls = domain && domain !== "localhost";
+
+      const rule = useTls
+        ? `Host(\`${domain}\`) && PathPrefix(\`/${slug}\`)`
+        : `PathPrefix(\`/${slug}\`)`;
+
       const labels: Record<string, string> = {
         [MANAGED_LABEL]: MANAGED_VALUE,
         [APP_ID_LABEL]: appConfig.id,
         "traefik.enable": "true",
-        [`traefik.http.routers.${slug}.rule`]: `PathPrefix(\`/${slug}\`)`,
-        [`traefik.http.routers.${slug}.entrypoints`]: "web",
+        [`traefik.http.routers.${slug}.rule`]: rule,
+        [`traefik.http.routers.${slug}.entrypoints`]: useTls
+          ? "websecure"
+          : "web",
         [`traefik.http.services.${slug}.loadbalancer.server.port`]:
           String(RSERVE_WS_PORT),
         // Strip the prefix so Rserve sees / not /slug
@@ -328,6 +337,10 @@ export class DockerSpawner implements ISpawner {
           `/${slug}`,
         [`traefik.http.routers.${slug}.middlewares`]: `${slug}-strip`,
       };
+
+      if (useTls) {
+        labels[`traefik.http.routers.${slug}.tls.certresolver`] = "letsencrypt";
+      }
 
       const container = await this.docker.createContainer({
         Image: image,

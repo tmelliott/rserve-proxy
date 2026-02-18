@@ -39,6 +39,7 @@ services:
       DATABASE_URL: postgres://rserve:${DB_PASSWORD:-rserve}@postgres:5432/rserve
       SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      DOMAIN: ${DOMAIN:-localhost}
       TRAEFIK_METRICS_URL: http://traefik:8082/metrics
       PORT: "3000"
     volumes:
