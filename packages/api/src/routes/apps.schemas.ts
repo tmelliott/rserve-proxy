@@ -12,7 +12,7 @@ import { Type, type Static } from "@sinclair/typebox";
 // ---------------------------------------------------------------------------
 
 const SlugPattern = "^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$";
-const RVersionPattern = "^\\d+\\.\\d+\\.\\d+$";
+
 
 const CodeSourceGit = Type.Object({
   type: Type.Literal("git"),
@@ -34,7 +34,7 @@ export const CreateAppBody = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 128 }),
   slug: Type.String({ minLength: 3, maxLength: 64, pattern: SlugPattern }),
   rVersion: Type.Optional(
-    Type.String({ pattern: RVersionPattern, default: "4.4.1" }),
+    Type.String({ minLength: 1, default: "latest" }),
   ),
   packages: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { default: [] })),
   codeSource: CodeSource,
@@ -54,7 +54,7 @@ export type CreateAppBody = Static<typeof CreateAppBody>;
 
 export const UpdateAppBody = Type.Object({
   name: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
-  rVersion: Type.Optional(Type.String({ pattern: RVersionPattern })),
+  rVersion: Type.Optional(Type.String({ minLength: 1 })),
   packages: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
   codeSource: Type.Optional(CodeSource),
   entryScript: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
