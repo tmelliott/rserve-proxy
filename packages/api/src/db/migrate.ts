@@ -6,6 +6,8 @@
  * self-initializes its schema.
  */
 
+import { randomBytes } from "node:crypto";
+import { appendFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -24,10 +26,11 @@ export async function runMigrations(): Promise<void> {
   });
 }
 
+const ENV_FILE = resolve(__dirname, "../../.env");
+
 /**
  * Seed the initial admin user if none exists.
- * Uses raw SQL to avoid importing argon2 at the top level
- * (it's already a dependency but keeps this module lightweight).
+ * If ADMIN_PASSWORD is not set, generates a random one and persists to .env.
  */
 export async function seedAdminUser(): Promise<void> {
   const existing =
@@ -39,7 +42,18 @@ export async function seedAdminUser(): Promise<void> {
 
   const username = process.env.ADMIN_USERNAME || "admin";
   const email = process.env.ADMIN_EMAIL || "admin@localhost";
-  const password = process.env.ADMIN_PASSWORD || "admin";
+
+  let password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    password = randomBytes(32).toString("base64url");
+    try {
+      await appendFile(ENV_FILE, `\nADMIN_PASSWORD=${password}\n`);
+    } catch {
+      // In Docker the .env may not be writable — that's fine
+    }
+    console.log(`No ADMIN_PASSWORD set — generated one: ${password}`);
+  }
+
   const passwordHash = await hash(password);
 
   await client`

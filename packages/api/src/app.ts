@@ -5,7 +5,9 @@ import session from "@fastify/session";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import serveStatic from "@fastify/static";
-import { join, dirname } from "node:path";
+import { randomBytes } from "node:crypto";
+import { appendFile } from "node:fs/promises";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DockerSpawner } from "./spawner/docker-spawner.js";
@@ -59,9 +61,16 @@ export async function buildApp(opts?: BuildAppOptions) {
                 // Production: structured JSON logging with redaction
                 redact: ["req.headers.authorization", "req.headers.cookie"],
               },
-          // Generate unique request IDs for tracing
-          genReqId: (req) =>
-            req.headers["x-request-id"] as string || crypto.randomUUID(),
+          // Generate unique request IDs for tracing.
+          // Accept client-provided x-request-id only if it's a safe format
+          // (alphanumeric/dashes, max 64 chars — e.g. UUID from Traefik).
+          genReqId: (req) => {
+            const clientId = req.headers["x-request-id"];
+            if (typeof clientId === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(clientId)) {
+              return clientId;
+            }
+            return crypto.randomUUID();
+          },
         },
   );
 
@@ -82,24 +91,52 @@ export async function buildApp(opts?: BuildAppOptions) {
   // Plugins
   // ---------------------------------------------------------------------------
 
-  // CORS — in production, only allow same origin (or explicit CORS_ORIGIN)
+  // CORS — in production, require an explicit origin whitelist.
+  // `origin: true` (reflect any origin) with credentials is unsafe.
+  const corsOrigin = isDev
+    ? process.env.CORS_ORIGIN || "http://localhost:5173"
+    : process.env.CORS_ORIGIN || false; // false = no CORS (same-origin only)
+
+  if (!isDev && !process.env.CORS_ORIGIN) {
+    console.warn(
+      "CORS_ORIGIN not set in production — cross-origin requests will be blocked. " +
+        "Set CORS_ORIGIN to your domain (e.g. https://example.com) if needed.",
+    );
+  }
+
   await app.register(cors, {
-    origin: isDev
-      ? process.env.CORS_ORIGIN || "http://localhost:5173"
-      : process.env.CORS_ORIGIN || true, // true = reflect request origin (same-origin only with credentials)
+    origin: corsOrigin,
     credentials: true,
   });
 
   await app.register(cookie);
 
+  // Generate a session secret if none is configured.
+  // Persisted to .env so it survives restarts (sessions stay valid).
+  let sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    sessionSecret = randomBytes(48).toString("base64url");
+    const envFile = resolve(__dirname, "../../../.env");
+    try {
+      await appendFile(envFile, `\nSESSION_SECRET=${sessionSecret}\n`);
+      console.log("No SESSION_SECRET set — generated one and saved to .env");
+    } catch {
+      // In Docker the .env may not be writable — use ephemeral secret
+      console.warn(
+        "No SESSION_SECRET set and .env not writable — using ephemeral secret (sessions will not survive restarts)",
+      );
+    }
+  }
+
   await app.register(session, {
-    secret:
-      process.env.SESSION_SECRET || "change-me-to-a-long-random-string!!",
+    secret: sessionSecret,
     cookieName: "sessionId",
     cookie: {
-      // Secure cookies require HTTPS. Set COOKIE_SECURE=true when HTTPS is enabled.
-      // Defaults to false to avoid issues when running behind a non-TLS reverse proxy.
-      secure: process.env.COOKIE_SECURE === "true",
+      // Secure cookies in production by default (requires HTTPS).
+      // Override with COOKIE_SECURE=false if running behind a non-TLS reverse proxy.
+      secure: process.env.COOKIE_SECURE !== undefined
+        ? process.env.COOKIE_SECURE === "true"
+        : !isDev,
       httpOnly: true,
       sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
@@ -112,11 +149,13 @@ export async function buildApp(opts?: BuildAppOptions) {
     },
   });
 
-  // Rate limiting on auth routes (prevent brute force).
+  // Global rate limiting — 100 req/min per IP for all routes.
+  // Auth routes override with stricter limits (10/min for login).
   // Skipped in test mode — inject() shares 127.0.0.1 across all tests.
   if (process.env.NODE_ENV !== "test") {
     await app.register(rateLimit, {
-      global: false, // Don't rate-limit all routes — only auth
+      max: 100,
+      timeWindow: "1 minute",
     });
   }
 

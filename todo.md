@@ -338,6 +338,13 @@ and request metrics — both system-wide and per-app.
    health monitor polling interval is too long or the UI isn't re-fetching
    quickly enough after a stop action completes.
 
+3. **Upload UX needs improvement** — The "upload" code source type doesn't
+   show the uploaded file/archive contents after upload. Should: display the
+   extracted file tree in the UI so the user can verify the upload succeeded,
+   and allow selecting/checking one of the `.R` files as the entry script
+   (instead of only auto-detecting when there's exactly one). The edit page
+   also doesn't surface the upload filename or let users re-upload.
+
 ---
 
 ## Working On

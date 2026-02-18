@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { eq } from "drizzle-orm";
-import { mkdir, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, mkdir, readdir, realpath, rm } from "node:fs/promises";
+import { join, basename, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
 import { db } from "../db/index.js";
@@ -22,6 +22,52 @@ const UPLOAD_DIR =
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Walk a directory tree and remove any entries (files, symlinks, dirs) whose
+ * real path resolves outside the given boundary. Protects against "zip-slip"
+ * attacks where archive entries contain `../../` path traversal.
+ */
+async function sanitiseExtractedTree(boundary: string): Promise<void> {
+  const resolvedBoundary = resolve(boundary);
+
+  async function walk(dir: string): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      return; // directory may have been removed already
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry);
+      const stat = await lstat(fullPath);
+
+      if (stat.isSymbolicLink()) {
+        // Resolve symlink target and check if it escapes the boundary
+        const target = await realpath(fullPath).catch(() => null);
+        if (!target || !target.startsWith(resolvedBoundary)) {
+          await rm(fullPath, { force: true });
+        }
+      } else if (stat.isDirectory()) {
+        // Check the directory itself, then recurse
+        const resolved = resolve(fullPath);
+        if (!resolved.startsWith(resolvedBoundary)) {
+          await rm(fullPath, { recursive: true, force: true });
+        } else {
+          await walk(fullPath);
+        }
+      } else {
+        const resolved = resolve(fullPath);
+        if (!resolved.startsWith(resolvedBoundary)) {
+          await rm(fullPath, { force: true });
+        }
+      }
+    }
+  }
+
+  await walk(resolvedBoundary);
+}
 
 /** Convert a DB row to an AppConfig */
 function rowToAppConfig(row: typeof apps.$inferSelect): AppConfig {
@@ -593,19 +639,24 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
       await rm(uploadPath, { recursive: true, force: true }).catch(() => {});
       await mkdir(uploadPath, { recursive: true });
 
-      const filePath = join(uploadPath, data.filename);
+      // Sanitise filename: strip path components and leading dots to prevent
+      // path traversal (e.g. "../../etc/cron.d/evil" → "evil")
+      const safeName = basename(data.filename).replace(/^\.+/, "") || "upload";
+      const filePath = join(uploadPath, safeName);
       await pipeline(data.file, createWriteStream(filePath));
 
-      // If it's a zip or tar, extract it
-      const ext = data.filename.toLowerCase();
+      // If it's a zip or tar, extract it then sanitise for zip-slip attacks
+      const ext = safeName.toLowerCase();
       if (ext.endsWith(".tar.gz") || ext.endsWith(".tgz")) {
         const { execFileSync } = await import("node:child_process");
-        execFileSync("tar", ["-xzf", filePath, "-C", uploadPath]);
+        execFileSync("tar", ["-xzf", filePath, "--no-same-owner", "-C", uploadPath]);
         await rm(filePath).catch(() => {}); // remove the archive
+        await sanitiseExtractedTree(uploadPath);
       } else if (ext.endsWith(".zip")) {
         const { execFileSync } = await import("node:child_process");
         execFileSync("unzip", ["-o", filePath, "-d", uploadPath]);
         await rm(filePath).catch(() => {}); // remove the archive
+        await sanitiseExtractedTree(uploadPath);
       }
       // Otherwise, the file is placed as-is
 
@@ -624,7 +675,7 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
       return {
         ok: true,
         path: uploadPath,
-        filename: data.filename,
+        filename: safeName,
         ...(entryScript ? { entryScript } : {}),
       };
     },

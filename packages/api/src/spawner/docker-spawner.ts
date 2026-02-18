@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile, cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import * as tar from "tar-fs";
 import type {
   ISpawner,
@@ -83,7 +83,11 @@ function generateDockerfile(cfg: AppConfig): string {
   ];
 
   if (cfg.packages.length > 0) {
-    const pkgList = cfg.packages.map((p) => `'${p}'`).join(", ");
+    // Escape single quotes in package names as defense-in-depth
+    // (schema validation already restricts to safe characters)
+    const pkgList = cfg.packages
+      .map((p) => `'${p.replace(/'/g, "")}'`)
+      .join(", ");
     lines.push(`RUN R -e "pak::pak(c(${pkgList}))"`, "");
   }
 
@@ -101,7 +105,8 @@ function generateDockerfile(cfg: AppConfig): string {
     "",
     // Source the user's entry script (defines oc.init etc.), then start Rserve.
     // The platform controls the run.Rserve() call so users don't need to.
-    `CMD ["R", "-e", "source('/app/${cfg.entryScript}'); Rserve::run.Rserve(websockets.port=${RSERVE_WS_PORT}L, websockets=TRUE, oob=TRUE, websockets.qap.oc=TRUE, qap=FALSE)"]`,
+    // basename() as defense-in-depth against path traversal (schema already validates).
+    `CMD ["R", "-e", "source('/app/${basename(cfg.entryScript).replace(/'/g, "")}'); Rserve::run.Rserve(websockets.port=${RSERVE_WS_PORT}L, websockets=TRUE, oob=TRUE, websockets.qap.oc=TRUE, qap=FALSE)"]`,
     "",
   );
 
@@ -230,6 +235,10 @@ export class DockerSpawner implements ISpawner {
       // 2. Prepare the code directory
       if (appConfig.codeSource.type === "git") {
         const { repoUrl, branch } = appConfig.codeSource;
+        // Only allow HTTPS URLs — block file://, ssh://, git://, etc.
+        if (!repoUrl.startsWith("https://")) {
+          throw new Error(`Only HTTPS git URLs are allowed (got: ${repoUrl})`);
+        }
         const args = ["clone", "--depth", "1"];
         if (branch) args.push("--branch", branch);
         args.push(repoUrl, codeDir);

@@ -8,15 +8,34 @@
  * Environment:
  *   ADMIN_USERNAME  (default: "admin")
  *   ADMIN_EMAIL     (default: "admin@localhost")
- *   ADMIN_PASSWORD  (default: "admin")
+ *   ADMIN_PASSWORD  (read from env, or auto-generated and persisted to .env)
  */
 
+import { randomBytes } from "node:crypto";
+import { appendFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { hash } from "argon2";
 import { client } from "./index.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = resolve(__dirname, "../../../../.env");
+
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@localhost";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+
+async function getAdminPassword(): Promise<string> {
+  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD;
+
+  // Generate a random password and persist it to the .env file
+  const generated = randomBytes(32).toString("base64url");
+  await appendFile(ENV_FILE, `\nADMIN_PASSWORD=${generated}\n`);
+  console.log(
+    `  ⚠ No ADMIN_PASSWORD set — generated one and saved to .env`,
+  );
+  console.log(`  ⚠ Admin password: ${generated}`);
+  return generated;
+}
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -30,7 +49,8 @@ async function seed() {
       `  ✓ Admin user already exists: "${existing[0].username}" — skipping.`,
     );
   } else {
-    const passwordHash = await hash(ADMIN_PASSWORD);
+    const password = await getAdminPassword();
+    const passwordHash = await hash(password);
 
     const [admin] = await client`
       INSERT INTO users (username, email, password_hash, role)

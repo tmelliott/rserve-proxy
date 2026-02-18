@@ -1,0 +1,6 @@
+# Block files that may contain cloud credentials
+if git diff --cached --name-only | grep -qE '(-openrc\.sh|\.pem|\.key|credentials\.json)$'; then
+  echo "❌ Commit blocked: staged file matches credential pattern (-openrc.sh, .pem, .key, credentials.json)"
+  echo "   If intentional, use: git commit --no-verify"
+  exit 1
+fi

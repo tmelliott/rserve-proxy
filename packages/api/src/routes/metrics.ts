@@ -12,6 +12,17 @@ import { apps } from "../db/schema.js";
 import { MetricsQuery, AppIdParams } from "./metrics.schemas.js";
 import type { MetricsPeriod } from "@rserve-proxy/shared";
 
+/**
+ * Admins can access any app; regular users can only access their own.
+ */
+function canAccess(
+  session: { userId?: string; role?: string },
+  appOwnerId: string,
+): boolean {
+  if (session.role === "admin") return true;
+  return session.userId === appOwnerId;
+}
+
 export const metricsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", requireAuth);
 
@@ -50,10 +61,13 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params;
       const period = (request.query.period ?? "1h") as MetricsPeriod;
 
-      // Verify app exists
+      // Verify app exists and user has access
       const [row] = await db.select().from(apps).where(eq(apps.id, id));
       if (!row) {
         return reply.status(404).send({ error: "App not found" });
+      }
+      if (!canAccess(request.session, row.ownerId)) {
+        return reply.status(403).send({ error: "Access denied" });
       }
 
       if (period === "1h") {
@@ -129,10 +143,13 @@ export const appStatusHistoryRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params;
       const period = (request.query.period ?? "1h") as MetricsPeriod;
 
-      // Verify app exists
+      // Verify app exists and user has access
       const [row] = await db.select().from(apps).where(eq(apps.id, id));
       if (!row) {
         return reply.status(404).send({ error: "App not found" });
+      }
+      if (!canAccess(request.session, row.ownerId)) {
+        return reply.status(403).send({ error: "Access denied" });
       }
 
       const entries = app.metricsCollector.getAppStatusHistory(id, period);
