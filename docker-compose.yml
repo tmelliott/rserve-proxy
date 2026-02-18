@@ -6,22 +6,22 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@rserve.dev}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.entrypoint=metrics"
       - "--entrypoints.metrics.address=:8082"
-      # Uncomment for HTTPS with Let's Encrypt:
-      # - "--entrypoints.websecure.address=:443"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      # - "--certificatesresolvers.letsencrypt.acme.email=you@example.com"
-      # - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
-      # - "443:443"
-      - "8080:8080" # Traefik dashboard (dev only)
+      - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # - letsencrypt:/letsencrypt
+      - letsencrypt:/letsencrypt
     restart: unless-stopped
 
   manager:
@@ -32,6 +32,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.manager.rule=PathPrefix(`/`)"
       - "traefik.http.routers.manager.priority=1"
+      - "traefik.http.routers.manager.entrypoints=websecure"
+      - "traefik.http.routers.manager.tls.certresolver=letsencrypt"
       - "traefik.http.services.manager.loadbalancer.server.port=3000"
     environment:
       NODE_ENV: production
@@ -66,6 +68,6 @@ services:
 volumes:
   pgdata:
   app_uploads:
-  # letsencrypt:
+  letsencrypt:
 
 # Development override: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
