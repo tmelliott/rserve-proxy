@@ -469,7 +469,7 @@ export class DockerSpawner implements ISpawner {
     for (const img of images) {
       for (const tag of img.RepoTags ?? []) {
         const ver = tag.replace("rserve-base:", "");
-        if (ver && ver !== "latest") versions.push(ver);
+        if (ver) versions.push(ver);
       }
     }
     return versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
