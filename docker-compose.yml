@@ -30,8 +30,7 @@ services:
       dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.manager.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.manager.priority=1"
+      - "traefik.http.routers.manager.rule=Host(`${DOMAIN:-localhost}`)"
       - "traefik.http.routers.manager.entrypoints=websecure"
       - "traefik.http.routers.manager.tls.certresolver=letsencrypt"
       - "traefik.http.services.manager.loadbalancer.server.port=3000"
