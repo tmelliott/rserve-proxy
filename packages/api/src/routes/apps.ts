@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { eq } from "drizzle-orm";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
@@ -609,11 +609,24 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
       }
       // Otherwise, the file is placed as-is
 
-      return reply.send({
+      // Auto-detect entry script: if there's exactly one .R file, use it
+      const files = await readdir(uploadPath);
+      const rFiles = files.filter((f) => f.endsWith(".R"));
+      let entryScript: string | undefined;
+      if (rFiles.length === 1) {
+        entryScript = rFiles[0];
+        await db
+          .update(apps)
+          .set({ entryScript, updatedAt: new Date() })
+          .where(eq(apps.id, id));
+      }
+
+      return {
         ok: true,
         path: uploadPath,
         filename: data.filename,
-      });
+        ...(entryScript ? { entryScript } : {}),
+      };
     },
   );
 };
