@@ -61,6 +61,14 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", requireAuth);
 
   // -----------------------------------------------------------------------
+  // GET /api/apps/r-versions — List available R versions
+  // -----------------------------------------------------------------------
+  app.get("/r-versions", async () => {
+    const versions = await app.spawner.listRVersions();
+    return { versions };
+  });
+
+  // -----------------------------------------------------------------------
   // POST /api/apps — Create a new app
   // -----------------------------------------------------------------------
   app.post<{ Body: CreateAppBody }>(

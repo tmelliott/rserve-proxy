@@ -6,11 +6,27 @@
 
 services:
   traefik:
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entrypoint=metrics"
+      - "--entrypoints.metrics.address=:8082"
     ports:
       - "8880:80"       # http://localhost:8880 instead of :80
-      # - "8443:443"
       - "8881:8080"     # Traefik dashboard: http://localhost:8881
       - "8882:8082"     # Prometheus metrics: http://localhost:8882/metrics
+
+  manager:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.manager.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.manager.priority=1"
+      - "traefik.http.routers.manager.entrypoints=web"
+      - "traefik.http.routers.manager.tls.certresolver="
+      - "traefik.http.services.manager.loadbalancer.server.port=3000"
 
   postgres:
     ports:

@@ -26,6 +26,7 @@ export function AppEdit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
+  const [rVersions, setRVersions] = useState<string[]>([]);
 
   const {
     register,
@@ -37,6 +38,10 @@ export function AppEdit() {
   } = useForm<EditFormData>();
 
   const codeSourceType = watch("codeSourceType");
+
+  useEffect(() => {
+    api.apps.rVersions().then(({ versions }) => setRVersions(versions));
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -151,18 +156,26 @@ export function AppEdit() {
           <p className="mt-1 text-sm text-gray-500">{app.slug}</p>
         </div>
 
-        <Input
-          id="rVersion"
-          label="R Version"
-          {...register("rVersion", {
-            required: "R version is required",
-            pattern: {
-              value: /^\d+\.\d+\.\d+$/,
-              message: "Must be X.Y.Z format",
-            },
-          })}
-          error={errors.rVersion?.message}
-        />
+        <div>
+          <label htmlFor="rVersion" className="block text-sm font-medium text-gray-700">
+            R Version
+          </label>
+          <select
+            id="rVersion"
+            {...register("rVersion", { required: "R version is required" })}
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+          >
+            {rVersions.length === 0 && (
+              <option value="">Loading...</option>
+            )}
+            {rVersions.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+          {errors.rVersion?.message && (
+            <p className="mt-1 text-sm text-red-600">{errors.rVersion.message}</p>
+          )}
+        </div>
 
         <Controller
           name="packages"

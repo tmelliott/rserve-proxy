@@ -6,17 +6,21 @@
  * self-initializes its schema.
  */
 
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db, client } from "./index.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /**
  * Run pending migrations.
- * Resolves the migrations folder relative to the working directory,
- * which is `/app` in Docker (Dockerfile WORKDIR).
+ * Resolves the migrations folder relative to this file so it works
+ * both in Docker (WORKDIR /app) and local dev (tsx watch).
  */
 export async function runMigrations(): Promise<void> {
   await migrate(db, {
-    migrationsFolder: "./packages/api/drizzle",
+    migrationsFolder: resolve(__dirname, "../../drizzle"),
   });
 }
 

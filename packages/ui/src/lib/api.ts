@@ -63,6 +63,7 @@ export const api = {
       }),
   },
   apps: {
+    rVersions: () => request<{ versions: string[] }>("/api/apps/r-versions"),
     list: () => request<{ apps: AppWithStatus[] }>("/api/apps"),
     get: (id: string) => request<{ app: AppWithStatus }>(`/api/apps/${id}`),
     create: (

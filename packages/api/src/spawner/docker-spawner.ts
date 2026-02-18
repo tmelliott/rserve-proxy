@@ -461,6 +461,20 @@ export class DockerSpawner implements ISpawner {
     }
   }
 
+  async listRVersions(): Promise<string[]> {
+    const images = await this.docker.listImages({
+      filters: { reference: ["rserve-base"] },
+    });
+    const versions: string[] = [];
+    for (const img of images) {
+      for (const tag of img.RepoTags ?? []) {
+        const ver = tag.replace("rserve-base:", "");
+        if (ver && ver !== "latest") versions.push(ver);
+      }
+    }
+    return versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  }
+
   /** Remove ALL images (tagged + dangling) for an app. Use on app deletion. */
   async removeImages(appId: string): Promise<number> {
     const images = await this.docker.listImages({

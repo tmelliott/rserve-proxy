@@ -63,4 +63,7 @@ export interface ISpawner {
 
   /** Clean up stopped containers and dangling images for an app */
   cleanup(appId: string): Promise<void>;
+
+  /** List available R versions (from local rserve-base image tags) */
+  listRVersions(): Promise<string[]>;
 }
