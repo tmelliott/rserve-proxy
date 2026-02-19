@@ -5,9 +5,7 @@ import session from "@fastify/session";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import serveStatic from "@fastify/static";
-import { randomBytes } from "node:crypto";
-import { appendFile } from "node:fs/promises";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DockerSpawner } from "./spawner/docker-spawner.js";
@@ -50,6 +48,10 @@ export async function buildApp(opts?: BuildAppOptions) {
     Object.keys(fastifyOpts).length > 0
       ? fastifyOpts
       : {
+          // Trust X-Forwarded-* headers from Traefik (TLS termination proxy).
+          // Required so request.protocol reflects the real client protocol,
+          // which @fastify/session checks before saving secure cookies.
+          trustProxy: !isDev,
           logger: isDev
             ? {
                 transport: {
@@ -111,21 +113,12 @@ export async function buildApp(opts?: BuildAppOptions) {
 
   await app.register(cookie);
 
-  // Generate a session secret if none is configured.
-  // Persisted to .env so it survives restarts (sessions stay valid).
-  let sessionSecret = process.env.SESSION_SECRET;
+  const sessionSecret = process.env.SESSION_SECRET
+    || (process.env.NODE_ENV === "test" ? "test-secret-that-is-at-least-32-characters-long!!" : undefined);
   if (!sessionSecret) {
-    sessionSecret = randomBytes(48).toString("base64url");
-    const envFile = resolve(__dirname, "../../../.env");
-    try {
-      await appendFile(envFile, `\nSESSION_SECRET=${sessionSecret}\n`);
-      console.log("No SESSION_SECRET set — generated one and saved to .env");
-    } catch {
-      // In Docker the .env may not be writable — use ephemeral secret
-      console.warn(
-        "No SESSION_SECRET set and .env not writable — using ephemeral secret (sessions will not survive restarts)",
-      );
-    }
+    throw new Error(
+      "SESSION_SECRET is required. Generate one with: openssl rand -base64 48",
+    );
   }
 
   await app.register(session, {
