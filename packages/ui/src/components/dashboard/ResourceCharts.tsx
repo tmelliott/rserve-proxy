@@ -59,7 +59,7 @@ const CHART_COLORS = {
 };
 
 export function ResourceCharts({ dataPoints, period, aggregated }: ResourceChartsProps) {
-  const isAggregated = period === "7d" && aggregated && aggregated.length > 0;
+  const isAggregated = aggregated != null && aggregated.length > 0;
 
   const chartData = useMemo(
     () =>

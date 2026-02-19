@@ -98,3 +98,18 @@ export const systemMetricsPoints = pgTable(
     index("system_metrics_collected_at_idx").on(table.collectedAt),
   ],
 );
+
+export const appStatusPoints = pgTable(
+  "app_status_points",
+  {
+    id: serial("id").primaryKey(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    collectedAt: timestamp("collected_at").notNull(),
+  },
+  (table) => [
+    index("app_status_app_collected_idx").on(table.appId, table.collectedAt),
+  ],
+);

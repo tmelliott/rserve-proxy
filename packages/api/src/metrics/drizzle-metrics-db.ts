@@ -8,8 +8,8 @@
 import { sql, lt, gte, and, eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type * as schema from "../db/schema.js";
-import { appMetricsPoints, systemMetricsPoints } from "../db/schema.js";
-import type { MetricsDb } from "./metrics-collector.js";
+import { appMetricsPoints, systemMetricsPoints, appStatusPoints } from "../db/schema.js";
+import type { MetricsDb, StatusPoint } from "./metrics-collector.js";
 import type {
   AppMetricsSnapshot,
   SystemMetricsSnapshot,
@@ -92,6 +92,65 @@ export class DrizzleMetricsDb implements MetricsDb {
     }));
   }
 
+  async insertStatusPoints(points: StatusPoint[]): Promise<void> {
+    if (points.length === 0) return;
+    await this.db.insert(appStatusPoints).values(
+      points.map((p) => ({
+        appId: p.appId,
+        status: p.status,
+        collectedAt: new Date(p.collectedAt),
+      })),
+    );
+  }
+
+  async queryAllAppMetrics(since: Date): Promise<AppMetricsSnapshot[]> {
+    const rows = await this.db
+      .select()
+      .from(appMetricsPoints)
+      .where(gte(appMetricsPoints.collectedAt, since))
+      .orderBy(appMetricsPoints.collectedAt);
+
+    return rows.map((r) => ({
+      appId: r.appId,
+      cpuPercent: r.cpuPercent,
+      memoryMB: r.memoryMB,
+      memoryLimitMB: r.memoryLimitMB,
+      networkRxBytes: r.networkRxBytes,
+      networkTxBytes: r.networkTxBytes,
+      requestsPerMin: r.requestsPerMin,
+      containers: r.containers,
+      collectedAt: r.collectedAt.toISOString(),
+    }));
+  }
+
+  async queryStatusPoints(since: Date): Promise<StatusPoint[]> {
+    const rows = await this.db
+      .select()
+      .from(appStatusPoints)
+      .where(gte(appStatusPoints.collectedAt, since))
+      .orderBy(appStatusPoints.collectedAt);
+
+    return rows.map((r) => ({
+      appId: r.appId,
+      status: r.status,
+      collectedAt: r.collectedAt.toISOString(),
+    }));
+  }
+
+  async queryAppStatusPoints(appId: string, since: Date): Promise<StatusPoint[]> {
+    const rows = await this.db
+      .select()
+      .from(appStatusPoints)
+      .where(and(eq(appStatusPoints.appId, appId), gte(appStatusPoints.collectedAt, since)))
+      .orderBy(appStatusPoints.collectedAt);
+
+    return rows.map((r) => ({
+      appId: r.appId,
+      status: r.status,
+      collectedAt: r.collectedAt.toISOString(),
+    }));
+  }
+
   async queryAppMetricsAggregated(
     appId: string,
     since: Date,
@@ -162,6 +221,7 @@ export class DrizzleMetricsDb implements MetricsDb {
     await Promise.all([
       this.db.delete(appMetricsPoints).where(lt(appMetricsPoints.collectedAt, date)),
       this.db.delete(systemMetricsPoints).where(lt(systemMetricsPoints.collectedAt, date)),
+      this.db.delete(appStatusPoints).where(lt(appStatusPoints.collectedAt, date)),
     ]);
   }
 }

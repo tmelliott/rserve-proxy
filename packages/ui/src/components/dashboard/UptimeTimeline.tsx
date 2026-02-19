@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import type { MetricsPeriod, StatusHistoryEntry } from "@rserve-proxy/shared";
-import { STATUS_COLORS } from "../../lib/constants.js";
-import { bucketize, formatBucketTime, type BucketInfo } from "./uptime-utils.js";
+import {
+  bucketize,
+  formatBucketTime,
+  formatUptimeTooltip,
+  uptimeColor,
+  type BucketInfo,
+} from "./uptime-utils.js";
 
 interface UptimeTimelineProps {
   entries: StatusHistoryEntry[];
@@ -30,9 +35,7 @@ export function UptimeTimeline({ entries, period }: UptimeTimelineProps) {
             key={i}
             className={clsx(
               "h-6 flex-1 rounded-sm transition-opacity hover:opacity-80",
-              bucket.status
-                ? STATUS_COLORS[bucket.status]
-                : "bg-gray-100",
+              uptimeColor(bucket.uptimePercent),
             )}
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
@@ -63,7 +66,7 @@ export function UptimeTimeline({ entries, period }: UptimeTimelineProps) {
           <div>
             {formatBucketTime(tooltip.bucket.startTime, period)}
             {" — "}
-            {tooltip.bucket.status ?? "no data"}
+            {formatUptimeTooltip(tooltip.bucket)}
           </div>
         </div>
       )}

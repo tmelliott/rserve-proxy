@@ -17,7 +17,12 @@ export const BUCKET_MS: Record<MetricsPeriod, number> = {
 };
 
 export interface BucketInfo {
-  status: AppStatus | null;
+  /** Percentage of samples with "running" status (0–100), null = no data */
+  uptimePercent: number | null;
+  /** Most frequent status in this bucket (for tooltip context) */
+  dominantStatus: AppStatus | null;
+  /** Number of data points in this bucket */
+  totalSamples: number;
   startTime: Date;
   endTime: Date;
 }
@@ -37,28 +42,59 @@ export function bucketize(
     const bucketStart = startMs + i * bucketMs;
     const bucketEnd = bucketStart + bucketMs;
 
-    // Find entries that fall within this bucket; take the last one
-    let status: AppStatus | null = null;
+    // Collect all entries in this bucket
+    let runningCount = 0;
+    let totalCount = 0;
+    const statusCounts = new Map<AppStatus, number>();
+
     for (const entry of entries) {
       const t = new Date(entry.timestamp).getTime();
       if (t >= bucketStart && t < bucketEnd) {
-        status = entry.status;
+        totalCount++;
+        if (entry.status === "running") runningCount++;
+        statusCounts.set(entry.status, (statusCounts.get(entry.status) ?? 0) + 1);
       }
     }
 
-    // If no entry in this bucket, carry forward from previous bucket
-    if (status === null && i > 0) {
-      status = buckets[i - 1].status;
+    let uptimePercent: number | null = null;
+    let dominantStatus: AppStatus | null = null;
+
+    if (totalCount > 0) {
+      uptimePercent = (runningCount / totalCount) * 100;
+      // Find the most frequent status
+      let maxCount = 0;
+      for (const [status, cnt] of statusCounts) {
+        if (cnt > maxCount) {
+          maxCount = cnt;
+          dominantStatus = status;
+        }
+      }
+    } else if (i > 0) {
+      // No data in this bucket — carry forward from previous bucket
+      uptimePercent = buckets[i - 1].uptimePercent;
+      dominantStatus = buckets[i - 1].dominantStatus;
     }
 
     buckets.push({
-      status,
+      uptimePercent,
+      dominantStatus,
+      totalSamples: totalCount,
       startTime: new Date(bucketStart),
       endTime: new Date(bucketEnd),
     });
   }
 
   return buckets;
+}
+
+/** Get Tailwind color class based on uptime percentage */
+export function uptimeColor(percent: number | null): string {
+  if (percent === null) return "bg-gray-100";
+  if (percent === 100) return "bg-green-500";
+  if (percent >= 90) return "bg-green-400";
+  if (percent >= 50) return "bg-amber-400";
+  if (percent > 0) return "bg-red-400";
+  return "bg-red-500";
 }
 
 export function formatBucketTime(date: Date, period: MetricsPeriod): string {
@@ -74,4 +110,13 @@ export function formatBucketTime(date: Date, period: MetricsPeriod): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export function formatUptimeTooltip(bucket: BucketInfo): string {
+  if (bucket.uptimePercent === null) return "no data";
+  const pct = bucket.uptimePercent % 1 === 0
+    ? bucket.uptimePercent.toFixed(0)
+    : bucket.uptimePercent.toFixed(1);
+  if (bucket.totalSamples === 0) return `${pct}% uptime (carried)`;
+  return `${pct}% uptime (${bucket.totalSamples} samples)`;
 }

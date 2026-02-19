@@ -12,6 +12,13 @@ import { apps } from "../db/schema.js";
 import { MetricsQuery, AppIdParams } from "./metrics.schemas.js";
 import type { MetricsPeriod } from "@rserve-proxy/shared";
 
+/** Bucket size in minutes for each aggregated period */
+const BUCKET_MINUTES: Partial<Record<MetricsPeriod, number>> = {
+  "6h": 5,
+  "24h": 15,
+  "7d": 60,
+};
+
 /**
  * Admins can access any app; regular users can only access their own.
  */
@@ -35,19 +42,15 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const period = (request.query.period ?? "1h") as MetricsPeriod;
 
+      // 1h: raw data points from memory; 6h/24h/7d: aggregated from DB
       if (period === "1h") {
         const dataPoints = app.metricsCollector.getSystemMetrics(period);
         return reply.send({ period, dataPoints });
       }
 
-      if (period === "7d") {
-        const aggregated = await app.metricsCollector.getSystemMetricsAggregated(period);
-        return reply.send({ period, dataPoints: [], aggregated });
-      }
-
-      // 6h, 24h — raw rows from DB
-      const dataPoints = await app.metricsCollector.getSystemMetricsFromDb(period);
-      return reply.send({ period, dataPoints });
+      const bucketMinutes = BUCKET_MINUTES[period]!;
+      const aggregated = await app.metricsCollector.getSystemMetricsAggregated(period, bucketMinutes);
+      return reply.send({ period, dataPoints: [], aggregated });
     },
   );
 
@@ -70,19 +73,15 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(403).send({ error: "Access denied" });
       }
 
+      // 1h: raw data points from memory; 6h/24h/7d: aggregated from DB
       if (period === "1h") {
         const dataPoints = app.metricsCollector.getAppMetrics(id, period);
         return reply.send({ period, dataPoints });
       }
 
-      if (period === "7d") {
-        const aggregated = await app.metricsCollector.getAppMetricsAggregated(id, period);
-        return reply.send({ period, dataPoints: [], aggregated });
-      }
-
-      // 6h, 24h — raw rows from DB
-      const dataPoints = await app.metricsCollector.getAppMetricsFromDb(id, period);
-      return reply.send({ period, dataPoints });
+      const bucketMinutes = BUCKET_MINUTES[period]!;
+      const aggregated = await app.metricsCollector.getAppMetricsAggregated(id, period, bucketMinutes);
+      return reply.send({ period, dataPoints: [], aggregated });
     },
   );
 };
@@ -102,7 +101,11 @@ export const statusRoutes: FastifyPluginAsync = async (app) => {
     { schema: { querystring: MetricsQuery } },
     async (request, reply) => {
       const period = (request.query.period ?? "1h") as MetricsPeriod;
-      const appsList = app.metricsCollector.getStatusHistory(period);
+
+      // 1h: in-memory (hydrated from DB on startup); longer periods: from DB
+      const appsList = period === "1h"
+        ? app.metricsCollector.getStatusHistory(period)
+        : await app.metricsCollector.getStatusHistoryFromDb(period);
 
       // Resolve app names from DB for any that are still showing as IDs
       const appIds = appsList
@@ -152,7 +155,10 @@ export const appStatusHistoryRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(403).send({ error: "Access denied" });
       }
 
-      const entries = app.metricsCollector.getAppStatusHistory(id, period);
+      // 1h: in-memory; longer periods: from DB
+      const entries = period === "1h"
+        ? app.metricsCollector.getAppStatusHistory(id, period)
+        : await app.metricsCollector.getAppStatusHistoryFromDb(id, period);
       return reply.send({
         period,
         appId: id,

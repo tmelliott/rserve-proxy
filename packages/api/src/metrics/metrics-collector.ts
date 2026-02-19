@@ -45,12 +45,23 @@ export const PERIOD_MS: Record<MetricsPeriod, number> = {
 // DB interface (to avoid coupling to drizzle directly)
 // ---------------------------------------------------------------------------
 
+/** A persisted status point (appId + status + timestamp) */
+export interface StatusPoint {
+  appId: string;
+  status: string;
+  collectedAt: string; // ISO 8601
+}
+
 /** Minimal DB interface for persistence — allows mocking in tests */
 export interface MetricsDb {
   insertAppMetrics(snapshots: AppMetricsSnapshot[]): Promise<void>;
   insertSystemMetrics(snapshot: SystemMetricsSnapshot): Promise<void>;
+  insertStatusPoints(points: StatusPoint[]): Promise<void>;
   queryAppMetrics(appId: string, since: Date): Promise<AppMetricsSnapshot[]>;
+  queryAllAppMetrics(since: Date): Promise<AppMetricsSnapshot[]>;
   querySystemMetrics(since: Date): Promise<SystemMetricsSnapshot[]>;
+  queryStatusPoints(since: Date): Promise<StatusPoint[]>;
+  queryAppStatusPoints(appId: string, since: Date): Promise<StatusPoint[]>;
   queryAppMetricsAggregated(appId: string, since: Date, bucketMinutes: number): Promise<AggregatedSnapshot[]>;
   querySystemMetricsAggregated(since: Date, bucketMinutes: number): Promise<AggregatedSnapshot[]>;
   pruneOlderThan(date: Date): Promise<void>;
@@ -197,7 +208,7 @@ export class MetricsCollector {
     return this.metricsDb.queryAppMetricsAggregated(appId, since, bucketMinutes);
   }
 
-  /** Get status history for all apps */
+  /** Get status history for all apps (in-memory) */
   getStatusHistory(period: MetricsPeriod = "1h"): AppStatusHistory[] {
     const result: AppStatusHistory[] = [];
     for (const [appId, entries] of this.statusHistory) {
@@ -210,10 +221,63 @@ export class MetricsCollector {
     return result;
   }
 
-  /** Get status history for a single app */
+  /** Get status history for a single app (in-memory) */
   getAppStatusHistory(appId: string, period: MetricsPeriod = "1h"): StatusHistoryEntry[] {
     const entries = this.statusHistory.get(appId) ?? [];
     return filterByPeriod(entries, period, (e) => e.timestamp);
+  }
+
+  /** Get status history for all apps from DB (for longer periods) */
+  async getStatusHistoryFromDb(period: MetricsPeriod): Promise<AppStatusHistory[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    const points = await this.metricsDb.queryStatusPoints(since);
+    // Group by appId
+    const byApp = new Map<string, StatusHistoryEntry[]>();
+    for (const p of points) {
+      if (!byApp.has(p.appId)) byApp.set(p.appId, []);
+      byApp.get(p.appId)!.push({ status: p.status as StatusHistoryEntry["status"], timestamp: p.collectedAt });
+    }
+    const result: AppStatusHistory[] = [];
+    for (const [appId, entries] of byApp) {
+      result.push({ appId, appName: this.appNames.get(appId) ?? appId, entries });
+    }
+    return result;
+  }
+
+  /** Get status history for a single app from DB (for longer periods) */
+  async getAppStatusHistoryFromDb(appId: string, period: MetricsPeriod): Promise<StatusHistoryEntry[]> {
+    if (!this.metricsDb) return [];
+    const since = new Date(Date.now() - PERIOD_MS[period]);
+    const points = await this.metricsDb.queryAppStatusPoints(appId, since);
+    return points.map((p) => ({ status: p.status as StatusHistoryEntry["status"], timestamp: p.collectedAt }));
+  }
+
+  /** Hydrate in-memory ring buffers from DB (called on startup) */
+  async hydrateFromDb(): Promise<void> {
+    if (!this.metricsDb) return;
+    const since = new Date(Date.now() - PERIOD_MS["1h"]);
+    const [sysRows, appRows, statusRows] = await Promise.all([
+      this.metricsDb.querySystemMetrics(since),
+      this.metricsDb.queryAllAppMetrics(since),
+      this.metricsDb.queryStatusPoints(since),
+    ]);
+    // System metrics
+    this.systemMetrics = sysRows.slice(-MAX_ENTRIES);
+    // App metrics — group by appId
+    for (const row of appRows) {
+      if (!this.appMetrics.has(row.appId)) this.appMetrics.set(row.appId, []);
+      const arr = this.appMetrics.get(row.appId)!;
+      arr.push(row);
+      if (arr.length > MAX_ENTRIES) arr.splice(0, arr.length - MAX_ENTRIES);
+    }
+    // Status history — group by appId
+    for (const p of statusRows) {
+      if (!this.statusHistory.has(p.appId)) this.statusHistory.set(p.appId, []);
+      const arr = this.statusHistory.get(p.appId)!;
+      arr.push({ status: p.status as StatusHistoryEntry["status"], timestamp: p.collectedAt });
+      if (arr.length > MAX_ENTRIES) arr.splice(0, arr.length - MAX_ENTRIES);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -226,7 +290,7 @@ export class MetricsCollector {
     this.cycleCount++;
 
     // 1. Record status from health monitor
-    this.recordStatusHistory(now);
+    const statusPoints = this.recordStatusHistory(now);
 
     // 2. Collect Docker container stats
     let totalCpu = 0;
@@ -363,7 +427,7 @@ export class MetricsCollector {
 
     // 6. Persist to database (fire-and-forget)
     if (this.metricsDb) {
-      this.persistToDb(appSnapshots, systemSnapshot).catch(() => {});
+      this.persistToDb(appSnapshots, systemSnapshot, statusPoints).catch(() => {});
     }
 
     // 7. Periodic pruning (~every 60s)
@@ -377,6 +441,7 @@ export class MetricsCollector {
   private async persistToDb(
     appSnapshots: AppMetricsSnapshot[],
     systemSnapshot: SystemMetricsSnapshot,
+    statusPoints: StatusPoint[],
   ): Promise<void> {
     if (!this.metricsDb) return;
     await Promise.all([
@@ -384,12 +449,17 @@ export class MetricsCollector {
         ? this.metricsDb.insertAppMetrics(appSnapshots)
         : Promise.resolve(),
       this.metricsDb.insertSystemMetrics(systemSnapshot),
+      statusPoints.length > 0
+        ? this.metricsDb.insertStatusPoints(statusPoints)
+        : Promise.resolve(),
     ]);
   }
 
-  /** Record current status from health monitor into status history */
-  private recordStatusHistory(now: string): void {
+  /** Record current status from health monitor into status history.
+   *  Returns StatusPoint[] for DB persistence. */
+  private recordStatusHistory(now: string): StatusPoint[] {
     const snapshots = this.healthMonitor.getAllSnapshots();
+    const points: StatusPoint[] = [];
     for (const snap of snapshots) {
       const entry: StatusHistoryEntry = {
         status: snap.status,
@@ -404,7 +474,10 @@ export class MetricsCollector {
       if (entries.length > MAX_ENTRIES) {
         entries.splice(0, entries.length - MAX_ENTRIES);
       }
+
+      points.push({ appId: snap.appId, status: snap.status, collectedAt: now });
     }
+    return points;
   }
 
   /** Compute CPU %, memory MB, and network deltas from Docker stats */

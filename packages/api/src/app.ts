@@ -234,6 +234,13 @@ export async function buildApp(opts?: BuildAppOptions) {
       // DB may not be available (e.g. tests without real DB)
     }
 
+    // Hydrate in-memory ring buffers from DB before starting collection
+    try {
+      await metricsCollector.hydrateFromDb();
+    } catch {
+      // DB may not be available — start with empty buffers
+    }
+
     healthMonitor.start();
     metricsCollector.start();
   });

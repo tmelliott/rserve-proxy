@@ -2,8 +2,13 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import type { AppStatusHistory, MetricsPeriod } from "@rserve-proxy/shared";
-import { STATUS_COLORS } from "../../lib/constants.js";
-import { bucketize, formatBucketTime, type BucketInfo } from "./uptime-utils.js";
+import {
+  bucketize,
+  formatBucketTime,
+  formatUptimeTooltip,
+  uptimeColor,
+  type BucketInfo,
+} from "./uptime-utils.js";
 
 interface UptimeGridProps {
   apps: AppStatusHistory[];
@@ -54,9 +59,7 @@ export function UptimeGrid({ apps, period }: UptimeGridProps) {
                   key={i}
                   className={clsx(
                     "h-5 flex-1 rounded-sm transition-opacity hover:opacity-80",
-                    bucket.status
-                      ? STATUS_COLORS[bucket.status]
-                      : "bg-gray-100",
+                    uptimeColor(bucket.uptimePercent),
                   )}
                   onMouseEnter={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -89,7 +92,7 @@ export function UptimeGrid({ apps, period }: UptimeGridProps) {
           <div>
             {formatBucketTime(tooltip.bucket.startTime, period)}
             {" — "}
-            {tooltip.bucket.status ?? "no data"}
+            {formatUptimeTooltip(tooltip.bucket)}
           </div>
         </div>
       )}
