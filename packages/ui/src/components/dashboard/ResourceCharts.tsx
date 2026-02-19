@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -127,53 +128,77 @@ export function ResourceCharts({ dataPoints, period, aggregated }: ResourceChart
     );
   }
 
-  // For 7d aggregated view, render min/max range bands with avg line
+  // Aggregated view — min/max/avg lines for 6h, 24h, 7d
   if (isAggregated) {
+    const aggLabel = (name?: string) =>
+      name?.includes("Max") ? "Max" : name?.includes("Min") ? "Min" : "Avg";
+    const pctFmt = (value: unknown, name?: string) =>
+      [`${Number(value).toFixed(1)}%`, aggLabel(name)];
+    const mbFmt = (value: unknown, name?: string) =>
+      [`${Number(value).toFixed(0)} MB`, aggLabel(name)];
+    const netFmt = (value: unknown, name?: string) => {
+      const LABELS: Record<string, string> = {
+        rxAvg: "Rx Avg", rxMin: "Rx Min", rxMax: "Rx Max",
+        txAvg: "Tx Avg", txMin: "Tx Min", txMax: "Tx Max",
+      };
+      return [formatBytes(Number(value)), LABELS[name ?? ""] ?? name ?? ""];
+    };
+    const reqFmt = (value: unknown, name?: string) =>
+      [`${Number(value).toFixed(1)}/min`, aggLabel(name)];
+
     return (
       <div className={`grid gap-4 ${hasRequestData ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
         {/* CPU Chart — aggregated */}
         <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h4 className="mb-3 text-sm font-medium text-gray-700">CPU Usage (avg/min/max)</h4>
+          <h4 className="mb-3 text-sm font-medium text-gray-700">CPU Usage</h4>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={aggChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} width={40} />
-              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, ""]} />
+              <Tooltip formatter={pctFmt} />
               <Area type="monotone" dataKey="cpuMax" stroke="none" fill={CHART_COLORS.cpu} fillOpacity={0.08} />
               <Area type="monotone" dataKey="cpuMin" stroke="none" fill="#ffffff" fillOpacity={1} />
-              <Area type="monotone" dataKey="cpuAvg" stroke={CHART_COLORS.cpu} fill="none" strokeWidth={1.5} />
+              <Line type="monotone" dataKey="cpuMax" name="cpuMax" stroke={CHART_COLORS.cpu} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+              <Line type="monotone" dataKey="cpuMin" name="cpuMin" stroke={CHART_COLORS.cpu} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+              <Line type="monotone" dataKey="cpuAvg" name="cpuAvg" stroke={CHART_COLORS.cpu} strokeWidth={1.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Memory Chart — aggregated */}
         <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h4 className="mb-3 text-sm font-medium text-gray-700">Memory Usage (avg/min/max)</h4>
+          <h4 className="mb-3 text-sm font-medium text-gray-700">Memory Usage</h4>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={aggChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis domain={[0, Math.ceil(maxMemLimit * 1.1)]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v} MB`} width={55} />
-              <Tooltip formatter={(value) => [`${Number(value).toFixed(0)} MB`, ""]} />
+              <Tooltip formatter={mbFmt} />
               <Area type="monotone" dataKey="memMax" stroke="none" fill={CHART_COLORS.memory} fillOpacity={0.08} />
               <Area type="monotone" dataKey="memMin" stroke="none" fill="#ffffff" fillOpacity={1} />
-              <Area type="monotone" dataKey="memAvg" stroke={CHART_COLORS.memory} fill="none" strokeWidth={1.5} />
+              <Line type="monotone" dataKey="memMax" name="memMax" stroke={CHART_COLORS.memory} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+              <Line type="monotone" dataKey="memMin" name="memMin" stroke={CHART_COLORS.memory} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+              <Line type="monotone" dataKey="memAvg" name="memAvg" stroke={CHART_COLORS.memory} strokeWidth={1.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Network Chart — aggregated */}
         <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h4 className="mb-3 text-sm font-medium text-gray-700">Network I/O (avg)</h4>
+          <h4 className="mb-3 text-sm font-medium text-gray-700">Network I/O</h4>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={aggChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={formatBytes} width={55} />
-              <Tooltip formatter={(value, name) => [formatBytes(Number(value)), name === "rxAvg" ? "Received" : "Sent"]} />
-              <Area type="monotone" dataKey="rxAvg" stroke={CHART_COLORS.networkRx} fill={CHART_COLORS.networkRx} fillOpacity={0.1} strokeWidth={1.5} />
-              <Area type="monotone" dataKey="txAvg" stroke={CHART_COLORS.networkTx} fill={CHART_COLORS.networkTx} fillOpacity={0.1} strokeWidth={1.5} />
+              <Tooltip formatter={netFmt} />
+              <Line type="monotone" dataKey="rxMax" stroke={CHART_COLORS.networkRx} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.3} />
+              <Line type="monotone" dataKey="rxMin" stroke={CHART_COLORS.networkRx} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.3} />
+              <Line type="monotone" dataKey="rxAvg" stroke={CHART_COLORS.networkRx} strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="txMax" stroke={CHART_COLORS.networkTx} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.3} />
+              <Line type="monotone" dataKey="txMin" stroke={CHART_COLORS.networkTx} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.3} />
+              <Line type="monotone" dataKey="txAvg" stroke={CHART_COLORS.networkTx} strokeWidth={1.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -181,16 +206,18 @@ export function ResourceCharts({ dataPoints, period, aggregated }: ResourceChart
         {/* Requests Chart — aggregated */}
         {hasRequestData && (
           <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h4 className="mb-3 text-sm font-medium text-gray-700">Requests/min (avg/min/max)</h4>
+            <h4 className="mb-3 text-sm font-medium text-gray-700">Requests/min</h4>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={aggChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} width={40} />
-                <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}/min`, ""]} />
+                <Tooltip formatter={reqFmt} />
                 <Area type="monotone" dataKey="reqMax" stroke="none" fill={CHART_COLORS.requests} fillOpacity={0.08} />
                 <Area type="monotone" dataKey="reqMin" stroke="none" fill="#ffffff" fillOpacity={1} />
-                <Area type="monotone" dataKey="reqAvg" stroke={CHART_COLORS.requests} fill="none" strokeWidth={1.5} />
+                <Line type="monotone" dataKey="reqMax" name="reqMax" stroke={CHART_COLORS.requests} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+                <Line type="monotone" dataKey="reqMin" name="reqMin" stroke={CHART_COLORS.requests} strokeWidth={1} strokeDasharray="4 2" dot={false} strokeOpacity={0.4} />
+                <Line type="monotone" dataKey="reqAvg" name="reqAvg" stroke={CHART_COLORS.requests} strokeWidth={1.5} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
