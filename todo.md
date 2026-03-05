@@ -311,6 +311,7 @@ and request metrics — both system-wide and per-app.
 ## Stretch Goals (Future)
 
 - [x] Auto-inject `run.Rserve()` — user scripts just define `oc.init`, platform handles WebSocket startup (port 8081, no QAP)
+- [ ] If user is admin, in the header show a notification if an update is available - this will also involve setting up version tagging and a changelog
 - [ ] Multi-user workspace isolation
 - [ ] Dependency scanning — auto-detect `library()` / `::` calls in uploaded R code
 - [ ] Git webhook integration — auto-rebuild on push
@@ -320,6 +321,7 @@ and request metrics — both system-wide and per-app.
 - [ ] App environment variables — let users set custom env vars per app
 - [ ] Custom domain per app (Traefik Host rule)
 - [ ] Audit log — who did what, when
+- [ ] Private repo deployment - would require some kind of api token?
 
 ---
 
